@@ -70,9 +70,11 @@ durable lessons in `memory/MEMORY.md`; read both.
 - Constraints are a feature: a small, considered brush, not a drawing app.
   Prefer less technology.
 - `--seal` keeps its one meaning, "this colophon is yours". Reuse the existing
-  `.colophon--mine` class for your drawn colophons, so `spec/accent.test.ts`
-  keeps holding. Other people's live drafts must not use `--seal`. Don't add a
-  second accent colour. Ink is ink-coloured.
+  `.colophon--mine` class for your own colophons wherever they appear. If new
+  markup needs a new `var(--seal)` selector, add it to `ALLOWED_SELECTORS` in
+  `spec/accent.test.ts` deliberately, and only for selectors that mean "yours".
+  Other people's live drafts must not use `--seal`. Don't add a second accent
+  colour. Ink is ink-coloured.
 - Every user-supplied string reaches HTML only through `escapeHtml`, including
   anything pushed over the live channel. Strokes are numbers: validate their
   shape and ranges on the server rather than trusting the client.
@@ -87,8 +89,10 @@ durable lessons in `memory/MEMORY.md`; read both.
   and an optional drawing, and needs at least one of them. Without JS you can
   only type. With JS you draw, and may type a line too; that line becomes the
   drawing's text alternative. A drawing without one gets an alt like
-  "A brushed inscription, sealed 鑑, 7 October 2026". Keep the existing
-  `colophons` rows readable; add columns or tables, don't rewrite old data.
+  "A brushed inscription, sealed 鑑, 7 October 2026". A typed colophon posted
+  through the form is sealed the moment it's submitted, as today. Keep the
+  existing `colophons` rows readable; add columns or tables, don't rewrite old
+  data.
 - **The brush:** a fixed panel (pick a size that reads as a colophon sheet,
   taller than wide), one ink colour, a cap on strokes per colophon and points
   per stroke. Size the caps so one stroke per request stays well under the
@@ -131,7 +135,18 @@ durable lessons in `memory/MEMORY.md`; read both.
     plain readable transcript of every colophon: text, seal glyph, date, and
     "yours" where it applies. This is what screen readers and no-JS readers
     rely on, and what the existing specs read.
-- **Live:** server-sent events over plain `node:http` (no new dependency), with
+  - **Watch for duplicated text.** If a colophon's text appears both on the
+    scroll and in the transcript, two existing specs break:
+    `spec/colophon-concurrency.test.ts` counts each marker exactly once in
+    `/`'s HTML, and `entryFor` in `spec/colophon.test.ts` slices from the
+    first occurrence of a marker to the next `</li>`. Either render the text
+    once (e.g. the scroll panel uses `aria-labelledby` pointing at the
+    transcript entry, or shows only ink, glyph and date), or narrow both specs
+    to the transcript list using `jsdom` (already a devDependency). Keep their
+    intent: every write lands exactly once, and "yours" is checked inside the
+    right entry. Say which you did in the commit message.
+- **Live (the default; the ADR decision below may make it quieter):**
+  server-sent events over plain `node:http` (no new dependency), with
   strokes sent as plain `POST`s. Everyone with the page open sees each draft
   appear as a faint, unsealed panel marked with its writer's seal glyph
   (`src/seal.ts`), filling in stroke by stroke, and then settling into the
@@ -158,9 +173,13 @@ There are related questions under the same heading:
 - Do readers who aren't writing appear at all?
 - What does someone see when they come back tomorrow?
 
-The model above assumes live strokes. If your ADR argues for something
-quieter, the crit still needs a change that reaches others within a second
-(sealing, at minimum), so keep that part live whatever you choose.
+The model above, the goal and the walking skeleton assume live strokes. If
+your ADR argues for something quieter, change the live behaviour to match and
+say so in the README. The crit still needs a change that reaches others
+within a second (a sealed colophon appearing, at minimum), so keep that part
+live whatever you choose, and point the liveness spec at whatever you make
+live. Make the decision by the end of build step 2, so later steps build to
+it.
 
 ## Build order (a thin slice first, then widen)
 
@@ -174,8 +193,9 @@ Build the riskiest path end to end before polishing any part of it:
    currently says real-time belongs to a later crit; it's this one. Keep every
    existing heading, in order (`spec/invariants.test.ts` checks them). Write
    the ADR skeleton and the stroke format.
-2. **Walking skeleton.** Store a stroke, broadcast it over SSE, and show it in
-   a second tab within a second. Add the CI-safe liveness spec (below). Commit
+2. **Walking skeleton.** Store a stroke on the visitor's own draft (owned by
+   their cookie from the start), broadcast it over SSE, and show it in a
+   second tab within a second. Add the CI-safe liveness spec (below). Commit
    and push once green: from here the crit's pass condition is live.
 3. **The brush and sealing:** the panel, caps and validation, ownership, seal
    exactly once, sealed rejects strokes, server-rendered SVG for sealed
@@ -190,10 +210,13 @@ Build the riskiest path end to end before polishing any part of it:
 **Stretch, only if time remains:** a timelapse of the scroll being written,
 from stroke timestamps.
 
-**If you're behind, cut in this order:** the stretch, then presence polish,
-then abandonment (leave drafts open indefinitely and say so), then the phone
-layout polish. Never cut the live path, the specs for what you built, the ADR,
-the README rewrite or the reflection, and never leave `main` red.
+**If you're behind, cut in this order:** the stretch, then presence polish
+(how drafts settle, a reader count), then the abandonment timer, then phone
+polish. If the timer is cut, other people's drafts are shown only while their
+writer's stream is open, so an abandoned draft never sits on everyone's
+scroll; say so in `PROCESS.md`. Never cut the live path, the specs for what
+you built, the ADR, the README rewrite or the reflection. "No sideways page
+scroll at 390px" is a requirement, not polish. Never leave `main` red.
 
 **Out of scope:** accounts, likes or endorsements, replies, editing or
 deleting sealed content, notifications, colours beyond ink and the existing
@@ -207,8 +230,9 @@ must work over plain HTTP: use `fetch` with a streamed response body to read
 SSE. Browser tests live outside `spec/` (see "Testing the UI").
 
 Write tests alongside each feature, at least:
-- A stroke posted on one stream's behalf arrives on another open SSE stream
-  within about a second (the crit's condition, without a browser).
+- A stroke posted by one visitor (one cookie) arrives on another visitor's
+  open SSE stream within about a second (the crit's condition, without a
+  browser; if the ADR makes strokes quieter, test what it does make live).
 - Strokes are still there on the next request, and a sealed colophon renders
   in `/`'s HTML as SVG with no script.
 - Strokes over the caps, out of range or malformed are rejected rather than
@@ -340,8 +364,11 @@ the model, so if you're on something else, carry on and note it in
 - `memory/now.md`: hand off for the next run (crit 10, "Fly by instruments").
 - Final commit deletes `prompt.md`. Push, then `gh run watch` the CI run to
   the end. If it's red, fix and push again. When it's green, check that the
-  live site serves `/` and that a drawn colophon round-trips. Don't leave
-  test colophons on the live scroll.
+  live site serves `/`, and that a stroke drawn in one session reaches a
+  second session. **Don't seal anything on the live site**: sealed is
+  permanent and can't be deleted, so a test colophon would stay on the scroll
+  for good. Leave the test draft unsealed to be abandoned. Seal-and-render is
+  covered by the specs against the Docker image.
 
 ## Leave alone
 
