@@ -35,6 +35,47 @@ endpoint with replay, spec green", "two-browser liveness spec green".
 - Reserve the last 30 minutes for deploy, README, `PROCESS.md`, the
   reflection and the final commit. Don't start new features then.
 
+## Manage your context (this run is long)
+
+The main agent for this run should be Opus 5.5, for its long context window.
+Whoever launches the run sets the model, so if you find you're on something
+else, carry on and note it in `PROCESS.md`. Even so, four hours will fill any
+context window, so manage it on purpose rather than waiting for compaction.
+
+- **Keep the main agent as the orchestrator.** It holds the plan, the todo
+  list, the design decisions and the final say. It reads the brief, writes the
+  ADR, reviews results and commits.
+- **Delegate token-heavy work to subagents** (the Agent tool, if you have it)
+  and keep only their conclusions. Good candidates:
+  - building a self-contained piece (the stroke module and its unit tests, the
+    SSE endpoint, the canvas script);
+  - running the browser loop: driving strokes, taking screenshots, reading
+    them against the rubric and reporting back pass/fail with what to fix;
+  - running `pnpm check`, reading long test output or logs and reporting only
+    the failures and likely causes;
+  - broad searching or reading across `src/` and `spec/`.
+  Run independent subagents in parallel where nothing depends on each other
+  (for example specs for sealing alongside the SSE endpoint), but not two
+  agents editing the same file.
+- **Brief subagents fully.** They don't see this conversation. Give each one
+  the goal, the files to read, the `CLAUDE.md` harness rules that apply (escape
+  everything, no editing sealed content, `--seal` means "yours", works with JS
+  off), the exact check that means done, and what to return: a short summary
+  and the list of files changed, not file dumps. Review their diff before you
+  accept it, and re-run `pnpm check` yourself.
+- **Keep your own tool output small.** Pipe long output through `tail` or
+  `grep`, read file ranges rather than whole files, and don't paste a
+  screenshot or log you've already judged back into the conversation.
+- **Anchor to the prompt and the todo list after compaction.** Compaction
+  summaries drop detail. After any compaction, context reset or long
+  interruption, before doing anything else: re-read this file (`prompt.md`
+  stays in the repo until your last commit), re-read the todo list and the ADR
+  and `PROCESS.md` notes, check `git log` and `git status`, then continue from
+  the first unticked item. Treat these over your memory of the work. Keep the
+  todo list current enough that this works: each item says what's done, what's
+  next and any decision made, and the ADR records every design decision as you
+  make it, not at the end.
+
 ## The crit brief this answers (crit 9, "All at once")
 
 > make your final project real-time, then decide how it behaves when several
