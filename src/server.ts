@@ -1,10 +1,28 @@
 import { createServer } from "node:http";
 import { readFile, readFileSync } from "node:fs";
 import { extname } from "node:path";
-import { addColophon, listColophons } from "./db.ts";
+import type { ServerResponse } from "node:http";
+import {
+  abandonDraft,
+  abandonStaleDraft,
+  addColophon,
+  addStroke,
+  createDraft,
+  draftCount,
+  getColophon,
+  listColophons,
+  listDrafts,
+  openDraftFor,
+  sealDraft,
+  strokeCount,
+  strokesFor,
+} from "./db.ts";
 import { sealToken } from "./cookies.ts";
-import { renderIndex, renderReadme, MAX_BODY_LENGTH } from "./render.ts";
+import { renderEntry, renderIndex, renderPanel, renderReadme, MAX_BODY_LENGTH } from "./render.ts";
 import { renderMarkdown } from "./markdown.ts";
+import { currentEventId, openStream, publish } from "./events.ts";
+import { isAbandoned, MAX_STROKES, parseStroke, STROKE_VERSION } from "./strokes.ts";
+import { sealGlyph } from "./seal.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const README = readFileSync("README.md", "utf8");
@@ -14,7 +32,43 @@ const MIME: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
+  ".js": "text/javascript; charset=utf-8",
 };
+
+// More open drafts than this at once is not a gathering round a table; it
+// also bounds what an unhurried scroll can be asked to hold in flight.
+const MAX_OPEN_DRAFTS = 24;
+const SWEEP_MS = 30_000;
+
+function json(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+  res.end(JSON.stringify(body));
+}
+
+// undefined for anything that isn't a JSON object within the size cap. The
+// API only takes application/json, which a cross-site form can't send.
+async function readJson(req: import("node:http").IncomingMessage): Promise<Record<string, unknown> | "large" | undefined> {
+  if (!(req.headers["content-type"] ?? "").startsWith("application/json")) return undefined;
+  const raw = await readBody(req);
+  if (raw === undefined) return "large";
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function sweepAbandoned(now = Date.now()): void {
+  for (const d of listDrafts()) {
+    if (isAbandoned(d.last_activity ?? d.created_at, now) && abandonStaleDraft(d.id)) {
+      publish({ type: "abandoned", data: { id: d.id } });
+    }
+  }
+}
+setInterval(sweepAbandoned, SWEEP_MS).unref();
 
 // A URL-encoded 320-character colophon body never comes close to this — it's
 // a hard ceiling against a request that skips the form's own maxlength, not a
@@ -55,8 +109,124 @@ const server = createServer(async (req, res) => {
 
   if (req.method === "GET" && url.pathname === "/") {
     const error = url.searchParams.get("error");
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(renderIndex(listColophons(), token, error ?? undefined));
+    sweepAbandoned();
+    const drafts = listDrafts().map((d) => ({ colophon: d, strokes: strokesFor(d.id) }));
+    const sealed = listColophons().map((c) => ({ colophon: c, strokes: strokesFor(c.id) }));
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(renderIndex({ sealed, drafts, ownToken: token, eventId: currentEventId(), error: error ?? undefined }));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/events") {
+    const header = req.headers["last-event-id"];
+    const since = (Array.isArray(header) ? header[0] : header) ?? url.searchParams.get("since") ?? undefined;
+    openStream(req, res, since);
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/drafts") {
+    const existing = openDraftFor(token);
+    if (existing) {
+      json(res, 200, { id: existing.id, strokes: strokesFor(existing.id).length });
+      return;
+    }
+    if (draftCount() >= MAX_OPEN_DRAFTS) {
+      json(res, 503, { error: "busy", message: "Too many people are writing at once. Try again in a little while." });
+      return;
+    }
+    const draft = createDraft(token);
+    publish({ type: "draft", data: { id: draft.id, glyph: sealGlyph(token) } });
+    json(res, 201, { id: draft.id, strokes: 0 });
+    return;
+  }
+
+  const api = /^\/api\/colophons\/(\d{1,12})\/(strokes|seal|abandon)$/.exec(url.pathname);
+  if (req.method === "POST" && api) {
+    const id = Number(api[1]);
+    const action = api[2];
+    const payload = await readJson(req);
+    if (payload === "large") {
+      json(res, 413, { error: "large", message: "payload too large" });
+      return;
+    }
+    if (payload === undefined) {
+      json(res, 400, { error: "malformed", message: "expected a JSON object" });
+      return;
+    }
+    const colophon = getColophon(id);
+    if (!colophon) {
+      json(res, 404, { error: "missing", message: "no such colophon" });
+      return;
+    }
+    if (colophon.token !== token) {
+      json(res, 403, { error: "not-yours", message: "only the writer can add to or seal a colophon" });
+      return;
+    }
+    if (colophon.state === "sealed") {
+      json(res, 409, { error: "sealed", message: "this colophon is sealed; nothing more can be added" });
+      return;
+    }
+    if (colophon.state === "abandoned") {
+      json(res, 410, { error: "abandoned", message: "this draft was left too long and has been set aside" });
+      return;
+    }
+
+    if (action === "strokes") {
+      const stroke = parseStroke(payload);
+      if (typeof stroke === "string") {
+        json(res, 400, { error: "malformed", message: stroke });
+        return;
+      }
+      if (strokeCount(id) >= MAX_STROKES) {
+        json(res, 422, { error: "full", message: `a colophon holds at most ${MAX_STROKES} strokes` });
+        return;
+      }
+      const saved = addStroke(id, STROKE_VERSION, stroke.points);
+      publish({
+        type: "stroke",
+        data: { colophonId: id, strokeId: saved.id, t: saved.t, points: saved.points, ...(stroke.nonce ? { c: stroke.nonce } : {}) },
+      });
+      json(res, 201, { strokeId: saved.id });
+      return;
+    }
+
+    if (action === "seal") {
+      const body = typeof payload.body === "string" ? payload.body.trim() : "";
+      if (body.length > MAX_BODY_LENGTH) {
+        json(res, 400, { error: "long", message: `Keep the line to ${MAX_BODY_LENGTH} characters.` });
+        return;
+      }
+      if (body.length === 0 && strokeCount(id) === 0) {
+        json(res, 400, { error: "empty", message: "Brush something, or write a line, before sealing." });
+        return;
+      }
+      if (!sealDraft(id, token, body)) {
+        json(res, 409, { error: "sealed", message: "this colophon is already sealed" });
+        return;
+      }
+      publish({ type: "sealed", data: { id } });
+      json(res, 200, { id });
+      return;
+    }
+
+    if (abandonDraft(id, token)) publish({ type: "abandoned", data: { id } });
+    json(res, 200, { id });
+    return;
+  }
+
+  const fragment = /^\/colophons\/(\d{1,12})\/fragment$/.exec(url.pathname);
+  if (req.method === "GET" && fragment) {
+    const colophon = getColophon(Number(fragment[1]));
+    if (!colophon || colophon.state !== "sealed") {
+      json(res, 404, { error: "missing", message: "no such sealed colophon" });
+      return;
+    }
+    const strokes = strokesFor(colophon.id);
+    json(res, 200, {
+      id: colophon.id,
+      panel: renderPanel(colophon, strokes, token),
+      entry: renderEntry(colophon, strokes, token),
+    });
     return;
   }
 
@@ -74,7 +244,7 @@ const server = createServer(async (req, res) => {
     if (body.length === 0) error = "empty";
     else if (body.length > MAX_BODY_LENGTH) error = "long";
 
-    if (!error) addColophon(token, body);
+    if (!error) publish({ type: "sealed", data: { id: addColophon(token, body) } });
 
     res.writeHead(303, { Location: error ? `/?error=${error}` : "/" });
     res.end();

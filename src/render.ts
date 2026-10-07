@@ -1,6 +1,7 @@
 import { escapeHtml } from "./html.ts";
 import { sealGlyph } from "./seal.ts";
-import type { Colophon } from "./db.ts";
+import type { Colophon, Stroke } from "./db.ts";
+import { pathData, PANEL_HEIGHT, PANEL_WIDTH } from "./strokes.ts";
 
 const dateFmt = new Intl.DateTimeFormat("en-AU", {
   day: "numeric",
@@ -32,23 +33,97 @@ function layout(title: string, body: string): string {
 `;
 }
 
-function colophonEntry(c: Colophon, ownToken: string): string {
+export interface WithStrokes {
+  colophon: Colophon;
+  strokes: Stroke[];
+}
+
+function ink(strokes: Stroke[], className: string, extra = ""): string {
+  const paths = strokes
+    .map((st) => `<path data-stroke-id="${st.id}" d="${pathData(st.points)}" />`)
+    .join("");
+  return `<svg class="${className}" viewBox="0 0 ${PANEL_WIDTH} ${PANEL_HEIGHT}" aria-hidden="true"${extra}>${paths}</svg>`;
+}
+
+function sealedDate(c: Colophon): string {
+  return dateFmt.format(new Date(c.sealed_at ?? c.created_at));
+}
+
+// The text a drawn colophon is read as: its writer's own line if they gave
+// one, otherwise a description that says what it is without inventing words.
+export function altText(c: Colophon): string {
+  return c.body.length > 0 ? c.body : `A brushed inscription, sealed ${sealGlyph(c.token)}, ${sealedDate(c)}`;
+}
+
+// One sheet mounted on the scroll after the painting. Drawn colophons show
+// ink; typed ones are set in type.
+export function renderPanel(c: Colophon, strokes: Stroke[], ownToken: string): string {
+  const mine = c.token === ownToken;
+  const drawn = strokes.length > 0;
+  const label = drawn ? ` role="img" aria-label="${escapeHtml(altText(c))}"` : "";
+  const face = drawn ? ink(strokes, "ink") : `<p class="panel-type">${escapeHtml(c.body)}</p>`;
+  return `<div class="panel panel--sealed${mine ? " colophon--mine" : ""}" data-colophon-id="${c.id}" data-state="sealed"${label}>
+          ${face}
+          <span class="colophon-seal" aria-hidden="true">${sealGlyph(c.token)}</span>
+          <span class="colophon-date" aria-hidden="true">${sealedDate(c)}${mine ? " — yours" : ""}</span>
+        </div>`;
+}
+
+// Someone else's open draft: present in the HTML so a page and its event
+// stream start from the same moment, but hidden until the script runs, since
+// a draft is only ever a live thing.
+function renderDraft(d: WithStrokes): string {
+  const glyph = sealGlyph(d.colophon.token);
+  return `<div class="panel panel--draft" data-colophon-id="${d.colophon.id}" data-state="drafting" hidden
+             role="img" aria-label="A colophon being brushed now, seal ${glyph}">
+          ${ink(d.strokes, "ink")}
+          <span class="colophon-seal" aria-hidden="true">${glyph}</span>
+          <span class="panel-note" aria-hidden="true">being written</span>
+        </div>`;
+}
+
+function renderBrush(own: WithStrokes | undefined, ownToken: string): string {
+  return `<div class="panel panel--brush colophon--mine" data-state="drafting" data-brush hidden
+             ${own ? `data-colophon-id="${own.colophon.id}"` : ""}>
+          ${ink(own?.strokes ?? [], "ink brush-surface", ' data-brush-surface=""')}
+          <span class="colophon-seal" aria-hidden="true">${sealGlyph(ownToken)}</span>
+          <span class="panel-note">your sheet: brush here</span>
+        </div>`;
+}
+
+export function renderEntry(c: Colophon, strokes: Stroke[], ownToken: string): string {
   const mine = c.token === ownToken;
   const glyph = sealGlyph(c.token);
-  return `<li class="colophon${mine ? " colophon--mine" : ""}">
+  const drawn = strokes.length > 0;
+  const text =
+    c.body.length > 0
+      ? `<p class="colophon-body">${escapeHtml(c.body)}</p>`
+      : `<p class="colophon-body colophon-body--alt">${escapeHtml(altText(c))}</p>`;
+  return `<li class="colophon${mine ? " colophon--mine" : ""}" data-colophon-id="${c.id}">
         <span class="colophon-seal" aria-hidden="true">${glyph}</span>
-        <p class="colophon-body">${escapeHtml(c.body)}</p>
-        <p class="colophon-date">${dateFmt.format(new Date(c.created_at))}${mine ? " — yours" : ""}</p>
+        ${drawn ? ink(strokes, "thumb") : ""}${text}
+        <p class="colophon-date">${drawn ? "brushed, " : ""}${sealedDate(c)}${mine ? " — yours" : ""}</p>
       </li>`;
 }
 
-export function renderIndex(colophons: Colophon[], ownToken: string, error?: string): string {
+export interface IndexView {
+  sealed: WithStrokes[];
+  drafts: WithStrokes[];
+  ownToken: string;
+  eventId: string;
+  error?: string;
+}
+
+export function renderIndex({ sealed, drafts, ownToken, eventId, error }: IndexView): string {
   const errorMessage =
     error === "empty"
       ? "A colophon needs at least a few words."
       : error === "long"
         ? `Keep it to ${MAX_BODY_LENGTH} characters — the margin is not infinite.`
         : undefined;
+
+  const own = drafts.find((d) => d.colophon.token === ownToken);
+  const others = drafts.filter((d) => d !== own);
 
   const body = `
     <header class="site-header">
@@ -58,34 +133,35 @@ export function renderIndex(colophons: Colophon[], ownToken: string, error?: str
     </header>
     <main>
       <figure class="scroll-frame">
-        <div class="scroll-scroller" tabindex="0" role="img"
-             aria-label="A handscroll painting: Wang Yi's 1363 portrait of Yang Zhuxi standing under a pine, with Ni Zan's rocks and pine, flanked by six and a half centuries of collectors' colophons and seals.">
-          <img src="/public/scroll.avif" alt="" />
+        <div class="scroll-scroller" tabindex="0" role="region" data-event-id="${escapeHtml(eventId)}"
+             aria-label="The handscroll, read right to left: the painting, then every colophon sealed onto it since">
+          <div class="scroll-track">
+            <img class="scroll-painting" src="/public/scroll.avif" width="2400" height="163"
+                 alt="A handscroll painting: Wang Yi's 1363 portrait of Yang Zhuxi standing under a pine, with Ni Zan's rocks and pine, flanked by six and a half centuries of collectors' colophons and seals." />
+            ${sealed.map((c) => renderPanel(c.colophon, c.strokes, ownToken)).join("\n            ")}
+            ${others.map(renderDraft).join("\n            ")}
+            ${renderBrush(own, ownToken)}
+          </div>
         </div>
         <figcaption>
           Wang Yi, <cite>Portrait of Yang Zhuxi</cite>, 1363 — Ni Zan painted the pine and
-          rock. Palace Museum, Beijing. Scroll sideways to see the whole thing, including
-          six and a half centuries of colophons already written into its margins.
+          rock. Palace Museum, Beijing. A handscroll reads right to left: scroll left past
+          the painting and six and a half centuries of colophons to the ones written here.
         </figcaption>
       </figure>
 
-      <section aria-labelledby="colophons-heading">
-        <h2 id="colophons-heading">Colophons</h2>
-        <p class="section-note">
-          Oldest first, the way a scroll unrolls. Yours is marked once it's here — nothing
-          you write can be edited or taken back, the same as ink.
-        </p>
-        <ol class="colophon-list">
-          ${colophons.map((c) => colophonEntry(c, ownToken)).join("\n          ")}
-        </ol>
-        ${colophons.length === 0 ? `<p class="empty-note">No one has written in the margin yet.</p>` : ""}
-      </section>
-
       <section aria-labelledby="write-heading">
         <h2 id="write-heading">Add yours</h2>
+        <p class="section-note brush-only" hidden>
+          Brush on the blank sheet at the scroll's left end, then seal it. Anyone else with the
+          scroll open watches your brush as you write. A sealed colophon can't be changed or taken
+          back; an unsealed one left for ten minutes is set aside.
+          <button type="button" class="link-button" data-goto-brush>Take me to the sheet</button>
+        </p>
         ${errorMessage ? `<p class="form-error" role="alert">${escapeHtml(errorMessage)}</p>` : ""}
-        <form method="post" action="/colophons">
-          <label for="body">A line for the margin</label>
+        <p class="form-error" role="status" data-brush-status></p>
+        <form method="post" action="/colophons" data-colophon-form>
+          <label for="body" data-body-label>A line for the margin</label>
           <textarea
             id="body"
             name="body"
@@ -93,14 +169,30 @@ export function renderIndex(colophons: Colophon[], ownToken: string, error?: str
             rows="3"
             required
           ></textarea>
-          <button type="submit">Write it in</button>
+          <div class="form-actions">
+            <button type="submit" data-submit>Write it in</button>
+            <button type="button" class="quiet" data-start-over hidden>Start over</button>
+          </div>
         </form>
+      </section>
+
+      <section aria-labelledby="colophons-heading">
+        <h2 id="colophons-heading">Colophons</h2>
+        <p class="section-note">
+          Every colophon on the scroll, in the order it was sealed. Yours is marked once it's here
+          — nothing you seal can be edited or taken back, the same as ink.
+        </p>
+        <ol class="colophon-list">
+          ${sealed.map((c) => renderEntry(c.colophon, c.strokes, ownToken)).join("\n          ")}
+        </ol>
+        ${sealed.length === 0 ? `<p class="empty-note">No one has written in the margin yet.</p>` : ""}
       </section>
     </main>
     <footer>
       <p>Your seal on this page is <strong>${sealGlyph(ownToken)}</strong> — remembered by
         your browser, not by a name. <a href="/readme/">Read more.</a></p>
     </footer>
+    <script src="/public/scroll.js" type="module"></script>
   `;
 
   return layout("Colophon", body);

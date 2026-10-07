@@ -1,3 +1,4 @@
+import { JSDOM } from "jsdom";
 import { expect, inject, it } from "vitest";
 
 // addColophon is a single synchronous node:sqlite insert with no read-then-write
@@ -28,7 +29,11 @@ it("every one of many genuinely concurrent writes lands exactly once", async () 
   const responses = await Promise.all(markers.map((marker) => write(marker)));
   for (const res of responses) expect(res.status).toBe(303);
 
-  const text = await (await fetch(new URL("/", baseUrl))).text();
+  // Since crit 9 a typed colophon is shown twice on purpose (a sheet on the
+  // scroll, an entry in the transcript), so this counts it in the transcript:
+  // every write still lands there exactly once.
+  const html = await (await fetch(new URL("/", baseUrl))).text();
+  const text = new JSDOM(html).window.document.querySelector(".colophon-list")!.innerHTML;
   for (const marker of markers) {
     expect(text.split(marker).length - 1, `expected exactly one "${marker}"`).toBe(1);
   }

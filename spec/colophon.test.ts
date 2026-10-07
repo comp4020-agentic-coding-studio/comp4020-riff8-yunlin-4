@@ -1,3 +1,4 @@
+import { JSDOM } from "jsdom";
 import { expect, inject, it } from "vitest";
 
 // Own checks: the promises README.md and CLAUDE.md make that the build alone
@@ -59,15 +60,15 @@ it("an over-length colophon is rejected rather than truncated", async () => {
   expect(text).not.toContain(tooLong);
 });
 
-// Slices out just the one <li> the marker landed in, so a false match against
-// unrelated "yours" text elsewhere on the page (the compose heading, say)
-// can't pass this test by accident.
+// Returns just the one transcript <li> the marker landed in, so a false match
+// against unrelated "yours" text elsewhere on the page (the compose heading,
+// or the same colophon's sheet on the scroll, which renders before the list)
+// can't pass or fail this test by accident.
 function entryFor(text: string, marker: string): string {
-  const at = text.indexOf(marker);
-  expect(at, `expected to find "${marker}" on the page`).toBeGreaterThan(-1);
-  const end = text.indexOf("</li>", at);
-  expect(end).toBeGreaterThan(-1);
-  return text.slice(at, end);
+  const doc = new JSDOM(text).window.document;
+  const entry = [...doc.querySelectorAll(".colophon-list > li")].find((li) => li.textContent!.includes(marker));
+  expect(entry, `expected to find "${marker}" in the transcript`).toBeTruthy();
+  return entry!.outerHTML;
 }
 
 it("a colophon reads as mine only for the browser that wrote it", async () => {
