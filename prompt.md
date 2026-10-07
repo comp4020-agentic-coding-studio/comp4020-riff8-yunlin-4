@@ -13,6 +13,28 @@ and deploy setup (`Dockerfile`, `fly.toml`). The `CLAUDE.md` harness rules and
 `PROCESS.md` win over anything below if they conflict. Write a short plan into
 `PROCESS.md` (or the ADR) before building; don't wait for confirmation.
 
+## Track your progress (do this first)
+
+Four hours is long enough to lose the thread. Before writing any code, create
+a todo list with your task-tracking tool, if you have one (otherwise a
+checklist in a scratch file such as `PROGRESS.md`, not committed or deleted
+before the last commit). Break the work into small, verifiable items drawn
+from the scope below, in priority order, each with a clear "done" test: for
+example "strip table and stroke validation, with unit tests green", "SSE
+endpoint with replay, spec green", "two-browser liveness spec green".
+
+- Mark one item in progress at a time, and tick it only when its check passes
+  (`pnpm check`, plus the browser check for UI items).
+- Note the time at the start and write the elapsed time next to each tick, so
+  you can see whether you're on budget. At about the 2-hour mark and again at
+  3 hours, re-read the list, cut from the bottom of the scope if you're behind,
+  and make sure the ADR, specs and reflection are not the items being squeezed.
+- Add items as you discover them (a bug, a spec for it) instead of holding
+  them in your head. Re-read the list after any long tool run or context
+  reset, and treat it as the source of truth for what's next.
+- Reserve the last 30 minutes for deploy, README, `PROCESS.md`, the
+  reflection and the final commit. Don't start new features then.
+
 ## The crit brief this answers (crit 9, "All at once")
 
 > make your final project real-time, then decide how it behaves when several
