@@ -29,7 +29,7 @@ next run.
 - [x] Seal token never in SSE payload or another visitor's HTML (spec) (16:21)
 - [x] playwright-core e2e: two contexts, draw → see; JS-off pass; 390px (16:27)
 - [x] Screenshot loop against the rubric (16:27)
-- [x] Docker image `pnpm check` green (16:29; again three times on the final image, 16:41)
+- [x] Docker image `pnpm check` green (16:29; again three times on the final image, 16:38)
 - [x] PROCESS.md, reflections/crit-9.md, ADR final (16:37); prompt.md deleted in the last commit
 
 ## Found along the way
@@ -51,7 +51,7 @@ next run.
 - [x] Ink that reads as brushed (public/ink.js, 16:30)
 - [x] A brushed transcript entry's date fell into the seal's column (found
   on a hand-drawn screenshot; spec/layout.test.ts) (16:35)
-- [x] e2e: an open page survives a server restart (16:39)
+- [x] e2e: an open page survives a server restart (16:37)
 
 ## Hand-off
 
