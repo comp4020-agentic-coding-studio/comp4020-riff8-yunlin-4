@@ -63,6 +63,22 @@ context window, so manage it on purpose rather than waiting for compaction.
   off), the exact check that means done, and what to return: a short summary
   and the list of files changed, not file dumps. Review their diff before you
   accept it, and re-run `pnpm check` yourself.
+- **Handle failed or hung subagents.** Don't wait on one indefinitely, and
+  don't accept a result you haven't checked.
+  - If a subagent errors, returns nothing, or reports success but the check
+    fails when you run it, retry once with a narrower brief (one file or one
+    failing test, the error text included).
+  - If it's still running far past what the task should take (about 20
+    minutes for a build task, 10 for a test run or search), stop it and treat
+    that as a failure. Background tasks stuck on a dev server or a browser
+    that never exits are the usual cause, so make sure the brief says to
+    start servers with a timeout and shut them down.
+  - After the retry fails, do the work yourself in small steps, or cut the
+    item and note it in the todo list and `PROCESS.md`. Don't loop a third
+    time, and don't let one stuck item eat the budget.
+  - If a subagent edited files and then failed, check `git status` and `git
+    diff` and revert or finish its partial changes before moving on, so `main`
+    never gets half a feature.
 - **Keep your own tool output small.** Pipe long output through `tail` or
   `grep`, read file ranges rather than whole files, and don't paste a
   screenshot or log you've already judged back into the conversation.
