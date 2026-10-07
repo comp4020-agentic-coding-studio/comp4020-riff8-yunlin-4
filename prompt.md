@@ -3,7 +3,8 @@
 You have about 4 hours, unattended, start to finish. Nobody will answer
 questions, so wherever something is ambiguous, pick the option closest to the
 README's argument, record the choice in the ADR or `PROCESS.md`, and carry on.
-Keep `main` deployable after every commit. 
+Keep `main` deployable after every commit. Delete this file (`prompt.md`) in
+your last commit.
 
 You are extending "Colophon", an existing small web app in this repo. Before
 writing any code, read `README.md`, `CLAUDE.md`, `PROCESS.md`, `spec/` and skim
