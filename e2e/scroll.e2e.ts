@@ -3,7 +3,7 @@
 // browser. Starts its own server on a scratch database, drives the installed
 // Chrome (CHROME_PATH, or Playwright's "chrome" channel), asserts on the DOM
 // and leaves screenshots in e2e/shots/ for a person (or agent) to look at.
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,11 +15,15 @@ const BASE = `http://localhost:${PORT}`;
 const SHOTS = "e2e/shots";
 mkdirSync(SHOTS, { recursive: true });
 
-const server = spawn(process.execPath, ["src/server.ts"], {
-  env: { ...process.env, PORT: String(PORT), DB_PATH: join(mkdtempSync(join(tmpdir(), "colophon-e2e-")), "c.db") },
-  stdio: ["ignore", "pipe", "inherit"],
-});
-await new Promise<void>((resolve) => server.stdout!.on("data", (d: Buffer) => d.includes("listening") && resolve()));
+const DB_PATH = join(mkdtempSync(join(tmpdir(), "colophon-e2e-")), "c.db");
+function startServer(): Promise<ChildProcess> {
+  const child = spawn(process.execPath, ["src/server.ts"], {
+    env: { ...process.env, PORT: String(PORT), DB_PATH },
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  return new Promise((resolve) => child.stdout!.on("data", (d: Buffer) => d.includes("listening") && resolve(child)));
+}
+let server = await startServer();
 
 const browser = await chromium.launch(
   process.env.CHROME_PATH
@@ -268,6 +272,20 @@ try {
     await page.waitForTimeout(300);
     const left = await page.evaluate(() => document.querySelector(".scroll-scroller")!.scrollLeft);
     assert.ok(left < 0, `scrollLeft ${left}`);
+  });
+  await step("after a server restart (every deploy), an open page reloads and misses nothing", async () => {
+    const page = await open(readerCtx);
+    await page.evaluate(() => ((window as unknown as { before: boolean }).before = true));
+    server.kill();
+    await new Promise((r) => setTimeout(r, 800));
+    server = await startServer();
+    await fetch(`${BASE}/colophons`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "body=written-while-the-page-was-cut-off",
+    });
+    await page.waitForFunction(() => !(window as unknown as { before?: boolean }).before, null, { timeout: 8000 });
+    await page.waitForSelector(".panel-type:has-text('written-while-the-page-was-cut-off')", { timeout: 3000 });
   });
 } finally {
   await browser.close();
