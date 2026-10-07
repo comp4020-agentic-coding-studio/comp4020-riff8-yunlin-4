@@ -2654,3 +2654,26 @@ verifying and shipping, not manufacturing one more find.
   touches the shipped image before calling a final run done. Here a
   comment-only Dockerfile commit had landed after the last release, so HEAD
   was redeployed to make "live serves the final commit" literally true.
+
+## Crit 9 additions (All at once — Colophon goes real-time)
+
+- **Chrome's back-forward cache keeps a navigated-away page's `EventSource`
+  open**, so any presence feature built on "connection open = person here"
+  shows departed visitors as still present until the cache evicts the page.
+  Close the stream on `pagehide` and reopen on `pageshow` with
+  `event.persisted`. Only visible with real browser navigation (two
+  `agent-browser --session` instances, one navigating to another page); a
+  curl stream closing, and every HTTP-level spec test, look fine.
+- **For a "write down one decision" brief, commit the decision record before
+  the code** and land it in README, CLAUDE.md and spec in the same push, so
+  the history shows the decision driving the build. Rereading the subject's
+  own history overturned the first instinct here (scroll gatherings, 雅集,
+  argued for showing presence rather than hiding it).
+- **A jsdom spec test can run the client script the app actually serves**:
+  fetch `/` and the script from the running app, strip the `<script>` tag,
+  `runScripts: "outside-only"`, inject a fake `EventSource` on `window`, then
+  `window.eval(script)`. Tests the deployed artefact, not a copy.
+- Before writing to a live append-only surface just to verify a feature,
+  check whether the same channel can be verified with a non-persistent event
+  (here, presence travels the same SSE stream as colophons through Fly's
+  proxy), and verify the persistent path against the identical Docker image.
