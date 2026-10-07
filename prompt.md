@@ -3,8 +3,7 @@
 You have about 4 hours, unattended, start to finish. Nobody will answer
 questions, so wherever something is ambiguous, pick the option closest to the
 README's argument, record the choice in the ADR or `PROCESS.md`, and carry on.
-Keep `main` deployable after every commit. Delete this file (`prompt.md`) in
-your last commit.
+Keep `main` deployable after every commit. 
 
 You are extending "Colophon", an existing small web app in this repo. Before
 writing any code, read `README.md`, `CLAUDE.md`, `PROCESS.md`, `spec/` and skim
@@ -184,6 +183,47 @@ Keep them green unless a change genuinely supersedes one (for example
 say so in the commit message. Don't delete tests to get green.
 `spec/invariants.test.ts` must stay green: `/` returns 200 and `/readme/`
 publishes the full README.
+
+## Testing the UI (the canvas and live painting need eyes, not just unit tests)
+
+Passing unit tests don't show that painting works. Build a loop that uses the
+real UI and looks at the result.
+
+- **Drive a real headless browser.** Add Playwright (or Puppeteer) as a
+  `devDependency` only: the Dockerfile installs with `--prod`, so the image
+  stays small. `jsdom` has no real pointer or canvas behaviour, so it can't
+  test painting. If no browser can be launched, say so in `PROCESS.md` and
+  test through the HTTP and SSE layer instead; don't skip silently.
+- **Keep logic out of the canvas script.** Stroke validation, caps, point
+  encoding, sealing and replay live in plain modules with unit tests. The
+  client script stays thin, so most of the feature is testable without a
+  browser.
+- **Make the UI assertable as DOM, not pixels.** Render strokes as SVG paths
+  with stable hooks (`data-strip-id`, `data-stroke-id`, `data-state`, and a
+  `data-mine` marker). Tests then assert "the other browser shows 3 paths in
+  strip 7" rather than comparing images.
+- **Loop after each UI change:** drive a stroke with real pointer events
+  (mouse, and touch emulation at a phone viewport), take a screenshot, read
+  it, check it against the rubric below, fix. Cap this at about 3 rounds per
+  feature; 4 hours doesn't leave room for polishing.
+- **Test liveness with two browser contexts** on the same server: draw in one,
+  assert the path appears in the other within about a second. This is the
+  crit's pass condition, so make it a spec in `spec/`. Also drop and restore
+  the network on one context to exercise reconnect and replay, and run a pass
+  with JavaScript disabled.
+- **Rubric for screenshots.** An agent looking at a screenshot with no
+  criteria says "looks good", so check these explicitly:
+  - the edge reference from the previous strip lines up with the open strip;
+  - ink stays inside the strip's bounds;
+  - the open strip is visibly different from sealed ones, with no second
+    accent colour;
+  - other visitors' presence marks don't use `--seal`;
+  - nothing overflows sideways at 375px wide (the page still scrolls the
+    scroll, not the whole page);
+  - it still looks like the handscroll, not a drawing app.
+- Keep screenshots in a gitignored folder (add it to `.gitignore`), not in
+  the repo. In `reflections/crit-9.md`, list what you judged visually rather
+  than tested.
 
 ## Working rules
 
