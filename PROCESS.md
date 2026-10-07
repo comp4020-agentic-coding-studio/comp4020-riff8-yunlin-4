@@ -376,6 +376,11 @@ suite.
   spec file running in parallel; the heartbeat; and the per-address draft
   cap from behind Fly's proxy (`Fly-Client-IP`). The six-draft cap is
   tested in `e2e/` only.
+- The brief's "drop and restore one context's network" check was done two
+  other ways: Chrome's offline emulation doesn't sever an open
+  `EventSource`, so `e2e/` hides a tab (which closes its stream) and catches
+  it up, and kills and restarts the server under an open page, which is what
+  a deploy does.
 - Can't be tested: whether watching a stranger brush feels like company or
   like surveillance, and whether a brushed sheet reads as a colophon.
 - For review: the painting is 163px tall and now drawn about 3.5× larger, so
