@@ -106,12 +106,31 @@ durable lessons in `memory/MEMORY.md`; read both.
     10 minutes) is abandoned and never shown again. It was never ink on the
     scroll, so dropping it doesn't break permanence; say so in the README.
   - Sealed colophons reject further strokes with a clear error.
-- **Where they go:** sealed colophons join the scroll in order of sealing.
-  Real handscrolls read right to left, with colophons mounted after the
-  painting at the left end. Look at how `scroll.avif` is laid out and at the
-  current page, and choose whether drawn colophons continue the scroll itself
-  (the scroller will need to be taller) or sit in the list below it. Record
-  the choice in the ADR.
+- **Where they go (decided): drawn colophons continue the scroll itself.**
+  Sealed colophons are mounted onto the scroll after the painting, as panels
+  in the same horizontal scroller, in order of sealing. The open draft (yours,
+  and anyone else's being written live) sits at the scroll's growing end.
+  - Make the scroller much taller. It's 9rem now (`.scroll-scroller` in
+    `public/styles.css`), which is too short to read a brushed inscription.
+    Aim for most of the viewport height on desktop (around `min(70vh, 36rem)`),
+    with the painting scaled to that height, still scrolling sideways. On a
+    phone it must still fit without the whole page scrolling sideways.
+  - Panels are the scroll's height, with the panel's aspect ratio fixed, so a
+    colophon looks the same on every screen. Strokes are stored in panel
+    coordinates and scaled to fit.
+  - Real handscrolls read right to left, with colophons mounted after the
+    painting at the left end. Look at how `scroll.avif` is laid out (its own
+    old colophons show the direction) and continue it the same way. If that
+    means the scroll grows leftward, start the scroller scrolled to wherever a
+    reader should begin, and make sure new panels don't jump the reader's
+    position. Record the direction and why in the ADR.
+  - The scroller stays keyboard-scrollable (it has `tabindex="0"` today) and
+    keeps its accessible label. Each panel carries its typed line or alt text.
+  - Typed-only colophons (the no-JS path) appear on the scroll too, as panels
+    set in type rather than drawn ink. Keep the list below the scroll as a
+    plain readable transcript of every colophon: text, seal glyph, date, and
+    "yours" where it applies. This is what screen readers and no-JS readers
+    rely on, and what the existing specs read.
 - **Live:** server-sent events over plain `node:http` (no new dependency), with
   strokes sent as plain `POST`s. Everyone with the page open sees each draft
   appear as a faint, unsealed panel marked with its writer's seal glyph
@@ -160,10 +179,12 @@ Build the riskiest path end to end before polishing any part of it:
    and push once green: from here the crit's pass condition is live.
 3. **The brush and sealing:** the panel, caps and validation, ownership, seal
    exactly once, sealed rejects strokes, server-rendered SVG for sealed
-   colophons, the no-JS path, alt text, `--seal` on your own.
+   colophons, the no-JS path, alt text, `--seal` on your own, and the taller
+   scroller with colophons mounted as panels after the painting.
 4. **Reconnect and replay, stream limits, abandonment.**
 5. **Presence and polish:** a draft's seal glyph, how drafts settle into the
-   scroll, phone layout.
+   scroll, phone layout. (The taller scroller and panels-on-the-scroll belong
+   in step 3, not here: they are the design, not polish.)
 6. **Finish (reserve the last 30 minutes):** see "Finishing" below.
 
 **Stretch, only if time remains:** a timelapse of the scroll being written,
@@ -242,7 +263,10 @@ real UI and looks at the result.
   - a draft is visibly unsealed, and a sealed colophon looks settled;
   - `--seal` appears only on your own colophons;
   - nothing scrolls the whole page sideways at 390px;
-  - drawn and typed colophons sit together as one scroll;
+  - drawn and typed colophons sit together as one continuous scroll after
+    the painting, in the direction the painting's own colophons run;
+  - the scroller is tall enough to read an inscription, and the painting
+    isn't distorted;
   - it reads as a handscroll, not a drawing app.
 - Screenshots go in a gitignored folder (add it to `.gitignore`).
 
