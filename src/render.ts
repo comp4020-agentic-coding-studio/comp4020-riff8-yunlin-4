@@ -84,7 +84,8 @@ function renderDraft(d: WithStrokes): string {
 }
 
 function renderBrush(own: WithStrokes | undefined, ownToken: string): string {
-  return `<div class="panel panel--brush colophon--mine" data-state="drafting" data-brush hidden
+  return `<div class="panel panel--brush colophon--mine" data-state="drafting" data-brush hidden role="group"
+             aria-label="Your sheet: brush here with a mouse, finger or pen. Anyone with the scroll open sees each stroke. A typed line below works without a brush."
              ${own ? `data-colophon-id="${own.colophon.id}"` : ""}>
           ${ink(own?.strokes ?? [], "ink brush-surface", ' data-brush-surface=""')}
           <span class="colophon-seal" aria-hidden="true">${sealGlyph(ownToken)}</span>
@@ -148,7 +149,7 @@ export function renderIndex({ sealed, drafts, ownToken, eventId, error }: IndexV
           Wang Yi, <cite>Portrait of Yang Zhuxi</cite>, 1363 — Ni Zan painted the pine and
           rock. Palace Museum, Beijing. A handscroll reads right to left: scroll left past
           the painting and six and a half centuries of colophons to the ones written here.
-          <span class="js-only" hidden><button type="button" class="link-button" data-timelapse>Watch the
+          <span data-timelapse-wrap hidden><button type="button" class="link-button" data-timelapse>Watch the
             colophons being brushed again</button></span>
         </figcaption>
       </figure>

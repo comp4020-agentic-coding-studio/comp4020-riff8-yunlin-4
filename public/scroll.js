@@ -198,6 +198,10 @@ document.querySelector("[data-goto-brush]").addEventListener("click", () => {
 // order they were sealed, with the pauses between strokes taken (shortened)
 // from when each stroke actually arrived.
 const timelapseButton = document.querySelector("[data-timelapse]");
+const showTimelapse = () => {
+  document.querySelector("[data-timelapse-wrap]").hidden = !track.querySelector(".panel--sealed path");
+};
+showTimelapse();
 let replaying = null;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -284,6 +288,7 @@ const handlers = {
       after.nextElementSibling.classList.add("panel--settling");
     });
     if (!list.querySelector(`[data-colophon-id="${id}"]`)) list.insertAdjacentHTML("beforeend", entry);
+    showTimelapse();
     document.querySelector(".empty-note")?.remove();
   },
   abandoned({ id }) {
