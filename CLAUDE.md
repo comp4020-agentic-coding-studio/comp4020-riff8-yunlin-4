@@ -59,3 +59,16 @@ what has to change first, in the same commit.
   colour.
 - When a check finds a real bug, the fix is a new `spec/` test or a rule in
   this file, not just a patched line with no trace of what went wrong.
+- Nothing on the live channel (`/events`) or in another visitor's HTML may
+  carry a seal token. Ownership is decided per viewer, by the server
+  rendering that viewer's own page or fragment; events carry ids and glyphs.
+- Strokes are validated on the server against `src/strokes.ts` and rejected,
+  never clamped. `docs/adr/0001-*.md` is the stroke format and lifecycle; a
+  change to either changes the ADR in the same commit.
+- A live handler must not decide something is "someone else's" while this
+  page's own request for it is still in flight: a page's own event can beat
+  the response that tells it its id (`pnpm e2e` checks the writer never sees
+  their own draft as a stranger's).
+- Browser checks live in `e2e/` and run with `pnpm e2e` (set `CHROME_PATH`
+  if Chrome isn't installed as a channel). `spec/` runs in CI with no browser,
+  so everything in it works over plain HTTP.

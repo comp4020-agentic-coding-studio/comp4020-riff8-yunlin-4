@@ -64,19 +64,147 @@ h2 {
   margin: 0 0 2rem;
 }
 
+/* A handscroll reads right to left, so the scroller does too: it starts at
+   its right edge (the painting) with no script, and a sheet mounted at the
+   left end doesn't move what a reader is looking at. */
 .scroll-scroller {
+  direction: rtl;
   overflow-x: auto;
   overflow-y: hidden;
-  height: 9rem;
+  height: min(70vh, 36rem);
   border: 1px solid var(--rule);
   background: #ece4d3;
 }
 
-.scroll-scroller img {
+.scroll-track {
+  display: flex;
+  height: 100%;
+  width: max-content;
+}
+
+.scroll-painting {
   display: block;
+  flex: none;
   height: 100%;
   width: auto;
   max-width: none;
+}
+
+/* Every sheet has the same 3:5 shape at whatever height the scroll has, so a
+   colophon looks the same on every screen. Strokes are stored in a 240x400
+   viewBox and scale with it. */
+.panel {
+  position: relative;
+  flex: none;
+  direction: ltr;
+  height: 100%;
+  aspect-ratio: 3 / 5;
+  background: #f6f0e3;
+  border-inline: 1px solid var(--rule);
+  margin-inline-end: 0.35rem;
+}
+
+.ink,
+.thumb {
+  display: block;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.panel .colophon-seal {
+  position: absolute;
+  left: 8%;
+  bottom: 6%;
+  height: 1.9rem;
+  width: 1.9rem;
+  font-size: 1.15rem;
+  justify-content: center;
+  align-items: center;
+  background: transparent;
+}
+
+.panel .colophon-date,
+.panel-note {
+  position: absolute;
+  right: 6%;
+  bottom: 6%;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  writing-mode: vertical-rl;
+}
+
+.panel-type {
+  margin: 0;
+  padding: 10% 12% 30%;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Unsealed: wet, faint, edged with a dashed line, not yet part of the scroll. */
+.panel--draft,
+.panel--brush {
+  background: #fbf8f1;
+  border: 1px dashed var(--ink-soft);
+}
+
+.panel--draft .ink {
+  opacity: 0.55;
+}
+
+.panel--brush .ink {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.panel--brush .panel-note {
+  top: 5%;
+  bottom: auto;
+}
+
+.ink .wet {
+  opacity: 0.6;
+}
+
+.panel--arriving {
+  animation: arrive 0.6s ease-out;
+}
+
+.panel--settling {
+  animation: settle 1.2s ease-out;
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes settle {
+  from {
+    background: #fbf8f1;
+    opacity: 0.6;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel--arriving,
+  .panel--settling {
+    animation: none;
+  }
 }
 
 figcaption {
@@ -123,6 +251,16 @@ figcaption {
   border-color: var(--seal);
 }
 
+.thumb {
+  grid-column: 2;
+  width: 3rem;
+  height: 5rem;
+  stroke-width: 7;
+  margin-bottom: 0.3rem;
+  background: #f6f0e3;
+  border: 1px solid var(--rule);
+}
+
 .colophon-body {
   margin: 0 0 0.3rem;
   white-space: pre-wrap;
@@ -137,6 +275,11 @@ figcaption {
 
 .colophon--mine .colophon-date {
   color: var(--seal);
+}
+
+.colophon-body--alt {
+  color: var(--ink-soft);
+  font-style: italic;
 }
 
 .empty-note {
@@ -179,6 +322,32 @@ button:hover {
   background: #46403a;
 }
 
+.form-actions {
+  display: flex;
+  gap: 0.8rem;
+}
+
+button.quiet,
+.link-button {
+  background: transparent;
+  color: var(--ink);
+}
+
+button.quiet:hover,
+.link-button:hover {
+  background: #e6dcc8;
+}
+
+.link-button {
+  display: block;
+  margin-top: 0.5rem;
+  border-color: var(--ink-soft);
+}
+
+.form-error:empty {
+  display: none;
+}
+
 .form-error {
   color: var(--ink);
   font-weight: bold;
@@ -210,5 +379,9 @@ footer {
 
   .colophon {
     grid-template-columns: 2rem 1fr;
+  }
+
+  .scroll-scroller {
+    height: min(60vh, 28rem);
   }
 }
