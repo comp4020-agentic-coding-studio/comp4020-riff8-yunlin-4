@@ -18,3 +18,14 @@ it(".colophon-body can't be blown out sideways by an unbroken run of text", () =
   expect(match, "expected a .colophon-body rule in styles.css").toBeTruthy();
   expect(match![1]).toMatch(/overflow-wrap\s*:\s*anywhere/);
 });
+
+// Crit 9 put a thumbnail of the ink in a brushed colophon's transcript entry,
+// a third item beside the seal; the date then auto-placed into the seal's
+// narrow column, one word per line. Text stays in the second column.
+it("a transcript entry's text stays in its own column, whatever else is in the entry", () => {
+  for (const selector of ["colophon-body", "colophon-date"]) {
+    const match = css.match(new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`));
+    expect(match, `expected a .${selector} rule in styles.css`).toBeTruthy();
+    expect(match![1]).toMatch(/grid-column\s*:\s*2/);
+  }
+});

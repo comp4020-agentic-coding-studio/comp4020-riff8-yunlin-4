@@ -270,12 +270,14 @@ figcaption {
 }
 
 .colophon-body {
+  grid-column: 2;
   margin: 0 0 0.3rem;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .colophon-date {
+  grid-column: 2;
   margin: 0;
   font-size: 0.85rem;
   color: var(--ink-soft);
