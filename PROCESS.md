@@ -272,7 +272,7 @@ quotation marks is a stronger, more specific claim than a paraphrase, and
 needs the source's raw text checked directly, not just the general thrust
 of the argument.
 
-## What's next
+## What crit 8 left for crit 9
 
 Crit 9 asks for real-time (a colophon appearing in every open session
 within about a second) and one written decision about how the app behaves
@@ -280,3 +280,110 @@ with several people writing at once. The schema here is already the
 smallest version that can carry both: adding a broadcast on write and
 picking what happens when two people submit close together are the two
 concrete next steps, not a redesign.
+
+## Crit 9: brushed colophons, seen as they're written
+
+This was one unattended pod run (Opus 5.5) against a brief a pod wrote at
+crit 8: a colophon is brushed by hand in ink and closed with a seal, and
+everyone with the page open watches the ink arrive. The brief fixed the model
+(drafts, sealing, the scroll growing after the painting) and left one
+decision open: what other people see while someone writes.
+
+### The argument first, then the decision
+
+The README's argument changed before any code did
+([`490f71c`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/490f71c)). "Real-time belongs to the next crit" was no longer true, and
+the harness says a change that breaks the argument changes the argument
+first. The decision went into `docs/adr/0001-strokes-are-seen-as-they-are-brushed.md`
+in the same commit: every stroke live, readers invisible, order on the scroll
+by sealing rather than by starting. The case for it is historical. Many
+colophons were written at gatherings (雅集), the scroll unrolled on a table,
+friends watching one of them write, so live strokes reproduce that company.
+A "someone is writing" mark or silence until sealing would both turn the
+scroll into a place you post to. The cost is written down too: there's no
+private hesitation, and whether watching reads as company or surveillance is
+a question no test answers.
+
+The stroke format went into the same ADR before the server existed: integer
+points in a 240 × 400 panel, a version, caps sized so the largest legal
+stroke is about 3 KB against the 16 KB request limit. Everything after it
+(validation, SVG rendering, live events, replay, the timelapse) reads from
+that one definition.
+
+### Building it
+
+The server came first as a whole path ([`6a58ea5`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/6a58ea5)): drafts owned by the
+seal cookie, strokes posted one at a time and broadcast over server-sent
+events, sealing as a single conditional `UPDATE` so two seals at once seal
+exactly once, and replay by `Last-Event-ID` from a ring buffer, falling back
+to a reload when replay can't be exact. Old typed rows read as sealed through
+column defaults, with nothing rewritten. Two crit 8 specs broke on purpose,
+since a typed colophon now appears on the scroll and in the transcript; both
+were narrowed to the transcript with jsdom, keeping their intent.
+
+The scroll then became the page ([`8741e50`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/8741e50)): a right-to-left scroller,
+`min(70vh, 36rem)` tall, the painting first and sheets mounted to its left
+the way `scroll.avif`'s own colophons run. Right to left also solves two
+problems for free: the scroller opens on the painting with no script, and a
+sheet added at the far end doesn't move what a reader is looking at, since
+scroll position is measured from the right.
+
+`pnpm e2e` drives real Chrome through two browsers, a hidden-tab catch-up,
+JavaScript off and a touch stroke at 390px, then leaves screenshots to read
+against the brief's rubric. Its first run found what the HTTP specs couldn't:
+a page's own `draft` event can beat the response carrying its id, so the
+writer saw their own draft mounted as a stranger's and the brush jumped
+mid-stroke. It failed twice without the fix and passed three times with it.
+Screenshots also showed the ink reading as marker pen, so strokes became a
+filled brush outline from one module the server and browser share
+([`3271fc5`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/3271fc5)). A sealed sheet looks the same as it did live.
+
+A review subagent then read the diff adversarially ([`74713ce`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/74713ce)). It found
+that a client dropping mid-body crashed the whole process. That bug predates
+this run, but every brush stroke now reaches it. It also found that cookieless
+scripts could take every draft slot, that replay skipped the backpressure
+check, and that a stranger's early strokes could be dropped. All four are
+fixed, the crash with a raw-socket spec. A screenshot of a hand-drawn
+character found the last one ([`4b8affa`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/4b8affa)): a brushed entry's date had
+fallen into the seal's column.
+
+### The breakthrough
+
+Before: the brief described live strokes and a scroll growing after the
+painting, and the riskiest-looking parts were the transport and the races.
+The races the specs name (seal once, replay exactly, only the owner
+writes) came out right on the first pass and stayed green over plain HTTP. After: the bugs that mattered all lived where two clocks meet, a
+page's own request and the broadcast that echoes it, or a sheet arriving
+while someone reads elsewhere on the scroll. Only a real browser with two
+contexts open showed them. The e2e loop with screenshots read against a
+written rubric was the harness change that moved the work. Every UI bug in
+this run came from it or from the review pass, and none came from the spec
+suite.
+
+### Cut, untested, and for a human to review
+
+- Nothing from the cut list was cut, and the timelapse stretch was built
+  ([`9538625`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/9538625)).
+- Not pushed or deployed from this run: the clone has no remote, and pod runs
+  leave pushing to the harness and deploying to CI. The live check the brief
+  asks for (a stroke in one session reaching another on the deployed app, no
+  sealing on the live scroll) is for whoever looks next. `pnpm check` is green
+  against the Docker image built the way CI builds it.
+- The checklist is in `docs/progress.md`, not `memory/now.md` as the brief
+  asked, because the agent's doctrine says pod runs leave `memory/` alone.
+- Untested: the stream caps (200, 20 per address) and the 15-minute stream
+  lifetime, since a spec that opens 200 streams would starve every other
+  spec file running in parallel; the heartbeat; and the per-address draft
+  cap from behind Fly's proxy (`Fly-Client-IP`). The six-draft cap is
+  tested in `e2e/` only.
+- Can't be tested: whether watching a stranger brush feels like company or
+  like surveillance, and whether a brushed sheet reads as a colophon.
+- For review: the painting is 163px tall and now drawn about 3.5× larger, so
+  it's soft. The image was on the leave-alone list. The scroll also opens on
+  the title slip and blank mounting silk, as a real handscroll does, so the
+  painting is a scroll away.
+- For review: the brush is pointer-only. A keyboard or screen-reader visitor
+  writes a typed line, which is a colophon like any other.
+- Known edge: the same visitor in two tabs sees their own draft in the
+  second tab as a stranger's until it's sealed, since ownership is never sent
+  over the live channel.

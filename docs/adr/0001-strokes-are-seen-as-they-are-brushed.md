@@ -64,9 +64,9 @@ The related questions, decided under the same reasoning:
 ## What it costs
 
 - **No private hesitation.** A writer can't try a stroke in private. Every
-  stroke is seen, including the ones they later abandon. The page says so on
-  the brush panel before the first stroke ("others with the scroll open watch
-  your brush"), and an abandoned draft disappears for everyone, but anyone
+  stroke is seen, including the ones they later abandon. The page says so beside
+  the brush before the first stroke ("Anyone else with the scroll open
+  watches your brush as you write"), and an abandoned draft disappears for everyone, but anyone
   watching at the time saw it. Option 2's argument ("it's private until it's
   ink") is the real alternative, and its cost is the gathering.
 - **Watching can feel like surveillance.** Whether a stranger's live brush
@@ -134,7 +134,7 @@ A stroke, as posted and as broadcast:
 
 The server adds `strokeId` (its row id, ascending) and `t` (milliseconds since
 the epoch when it arrived). A colophon has at most 48 strokes. The largest
-legal stroke is about 6 KB of JSON, well under the 16 KB request limit.
+legal stroke is about 3 KB of JSON, well under the 16 KB request limit.
 
 Ink is rendered as one SVG `<path>` per stroke (`M x0 y0 L x1 y1 …`), round
 caps and joins, one ink colour, a fixed width.
