@@ -194,6 +194,28 @@ try {
     assert.equal(await writer.locator("[data-brush-surface] path").count(), 0);
   });
 
+  await step("one address can hold six open drafts, not every slot", async () => {
+    const seals: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const res = await fetch(BASE);
+      seals.push(res.headers.get("set-cookie")!.split(";")[0]!);
+    }
+    const open = (cookie: string) =>
+      fetch(`${BASE}/api/drafts`, { method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie }, body: "{}" });
+    const statuses = [];
+    for (const cookie of seals) statuses.push((await open(cookie)).status);
+    assert.deepEqual(statuses, [201, 201, 201, 201, 201, 201, 503]);
+    for (const cookie of seals.slice(0, 6)) {
+      const { id } = (await (await open(cookie)).json()) as { id: number };
+      await fetch(`${BASE}/api/colophons/${id}/abandon`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookie },
+        body: "{}",
+      });
+    }
+    assert.equal((await open(seals[6]!)).status, 201);
+  });
+
   await step("with JavaScript off: painting, sealed colophons, typed form, no brush", async () => {
     const ctx = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1280, height: 800 } });
     const page = await ctx.newPage();

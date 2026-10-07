@@ -18,6 +18,8 @@ export type LiveEvent =
 const BOOT = Date.now().toString(36);
 const BUFFER_SIZE = 512;
 export const MAX_CLIENTS = 200;
+// Open tabs from one address; stops one address holding every stream.
+const MAX_CLIENTS_PER_IP = 20;
 const HEARTBEAT_MS = 20_000;
 // A stream is closed after this long and the browser reconnects with its
 // Last-Event-ID. Bounds any one connection's life without losing an event.
@@ -31,6 +33,7 @@ interface Buffered {
 let seq = 0;
 const buffer: Buffered[] = [];
 const clients = new Set<ServerResponse>();
+const perIp = new Map<string, number>();
 
 export function currentEventId(): string {
   return `${BOOT}.${seq}`;
@@ -40,14 +43,14 @@ export function clientCount(): number {
   return clients.size;
 }
 
-function send(res: ServerResponse, frame: string): void {
-  // write() returning false means the socket's buffer is filling: this reader
-  // isn't keeping up. Drop it rather than let its queue grow; it reconnects
-  // and replays from its last id.
-  if (!res.write(frame)) {
-    clients.delete(res);
-    res.destroy();
-  }
+// write() returning false means the socket's buffer is filling: this reader
+// isn't keeping up. Drop it rather than let its queue grow; it reconnects and
+// replays from its last id.
+function send(res: ServerResponse, frame: string): boolean {
+  if (res.write(frame)) return true;
+  clients.delete(res);
+  res.destroy();
+  return false;
 }
 
 export function publish(event: LiveEvent): void {
@@ -71,8 +74,8 @@ export function replayFrom(lastId: string | undefined): string[] | "reset" {
   return buffer.filter((b) => b.seq > since).map((b) => b.frame);
 }
 
-export function openStream(req: IncomingMessage, res: ServerResponse, since: string | undefined): void {
-  if (clients.size >= MAX_CLIENTS) {
+export function openStream(req: IncomingMessage, res: ServerResponse, since: string | undefined, ip: string): void {
+  if (clients.size >= MAX_CLIENTS || (perIp.get(ip) ?? 0) >= MAX_CLIENTS_PER_IP) {
     res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Retry-After": "10" });
     res.end("too many open pages");
     return;
@@ -89,16 +92,25 @@ export function openStream(req: IncomingMessage, res: ServerResponse, since: str
   if (missed === "reset") {
     res.write(`id: ${currentEventId()}\nevent: reset\ndata: {}\n\n`);
   } else {
-    for (const frame of missed) res.write(frame);
+    // Through send(), so a reader not draining a long replay is dropped at
+    // the socket's buffer rather than queued in memory.
+    for (const frame of missed) if (!send(res, frame)) return;
   }
   clients.add(res);
+  perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
 
   const heartbeat = setInterval(() => send(res, ": hb\n\n"), HEARTBEAT_MS);
   const lifetime = setTimeout(() => res.end(), MAX_STREAM_MS);
+  let closed = false;
   const close = (): void => {
+    if (closed) return;
+    closed = true;
     clearInterval(heartbeat);
     clearTimeout(lifetime);
     clients.delete(res);
+    const left = (perIp.get(ip) ?? 1) - 1;
+    if (left > 0) perIp.set(ip, left);
+    else perIp.delete(ip);
   };
   req.on("close", close);
   res.on("close", close);

@@ -82,6 +82,23 @@ The related questions, decided under the same reasoning:
   `strokes` table polled by id, or a pub/sub service) and replay read from the
   database rather than memory. Not needed at this size.
 
+## Bounds on the live channel
+
+One 256 MB machine that stops when idle sets these:
+
+- Streams: at most 200 open, 20 from one address. A heartbeat every 20 s, and
+  each stream is closed after 15 minutes so the browser reconnects with its
+  last id. A reader whose socket buffer fills (it isn't reading) is dropped
+  rather than queued, during replay as well as live. The page closes its
+  stream when the tab is hidden or goes into the back-forward cache, so an
+  idle tab doesn't keep the machine awake.
+- Replay comes from the last 512 events in memory. Anything older, an id from
+  before a restart, or an id the server never issued gets `reset`, and the
+  page reloads.
+- Drafts: one per seal, at most 64 open at once and 6 from one address
+  (`Fly-Client-IP`), and only for a browser that already holds a seal cookie.
+  An abandoned draft's strokes are deleted, since nothing ever shows them.
+
 ## Direction on the scroll
 
 The painting is a handscroll read right to left. In `public/scroll.avif` the

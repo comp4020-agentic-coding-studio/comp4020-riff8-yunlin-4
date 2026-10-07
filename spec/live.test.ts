@@ -100,3 +100,23 @@ it("no seal token ever travels on the live channel", async () => {
   expect(stream.raw).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
   await stream.close();
 });
+
+it("the stream is uncached server-sent events that tell the browser how soon to reconnect", async () => {
+  const controller = new AbortController();
+  const res = await fetch(new URL("/events", baseUrl), { signal: controller.signal });
+  expect(res.status).toBe(200);
+  expect(res.headers.get("content-type")).toMatch(/^text\/event-stream/);
+  expect(res.headers.get("cache-control")).toBe("no-store");
+  const reader = res.body!.getReader();
+  const first = new TextDecoder().decode((await reader.read()).value);
+  expect(first).toMatch(/^retry: \d+\n\n/);
+  controller.abort();
+});
+
+it("an id from this server's future is a reset too, not an empty replay", async () => {
+  const html = await page(baseUrl);
+  const boot = /data-event-id="([0-9a-z]+)\./.exec(html)![1]!;
+  const stream = new Stream(baseUrl, { "Last-Event-ID": `${boot}.999999999` });
+  await stream.waitFor((e) => e.type === "reset");
+  await stream.close();
+});

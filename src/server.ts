@@ -37,7 +37,23 @@ const MIME: Record<string, string> = {
 
 // More open drafts than this at once is not a gathering round a table; it
 // also bounds what an unhurried scroll can be asked to hold in flight.
-const MAX_OPEN_DRAFTS = 24;
+const MAX_OPEN_DRAFTS = 64;
+// One person has one draft; this is for a household or a classroom behind
+// one address, and stops one address taking every slot.
+const MAX_DRAFTS_PER_IP = 6;
+const draftsByIp = new Map<string, Set<number>>();
+
+function forgetDraft(id: number): void {
+  for (const [ip, ids] of draftsByIp) {
+    if (ids.delete(id) && ids.size === 0) draftsByIp.delete(ip);
+  }
+}
+
+// Fly's proxy sets Fly-Client-IP and overwrites any value a client sends.
+export function clientIp(req: import("node:http").IncomingMessage): string {
+  const fly = req.headers["fly-client-ip"];
+  return (Array.isArray(fly) ? fly[0] : fly) ?? req.socket.remoteAddress ?? "unknown";
+}
 const SWEEP_MS = 30_000;
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -64,6 +80,7 @@ async function readJson(req: import("node:http").IncomingMessage): Promise<Recor
 function sweepAbandoned(now = Date.now()): void {
   for (const d of listDrafts()) {
     if (isAbandoned(d.last_activity ?? d.created_at, now) && abandonStaleDraft(d.id)) {
+      forgetDraft(d.id);
       publish({ type: "abandoned", data: { id: d.id } });
     }
   }
@@ -102,7 +119,7 @@ async function readBody(req: import("node:http").IncomingMessage): Promise<strin
   return tooLarge ? undefined : Buffer.concat(chunks).toString("utf8");
 }
 
-const server = createServer(async (req, res) => {
+async function handle(req: import("node:http").IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? "/", "http://internal");
   const { token, setCookie } = sealToken(req.headers.cookie);
   if (setCookie) res.setHeader("Set-Cookie", setCookie);
@@ -120,21 +137,29 @@ const server = createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/events") {
     const header = req.headers["last-event-id"];
     const since = (Array.isArray(header) ? header[0] : header) ?? url.searchParams.get("since") ?? undefined;
-    openStream(req, res, since);
+    openStream(req, res, since, clientIp(req));
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/drafts") {
+    // A draft belongs to a seal the browser already holds; a request with no
+    // seal cookie is a script, not a page someone loaded.
+    if (setCookie) {
+      json(res, 409, { error: "no-seal", message: "Reload the page, then brush." });
+      return;
+    }
     const existing = openDraftFor(token);
     if (existing) {
       json(res, 200, { id: existing.id, strokes: strokesFor(existing.id).length });
       return;
     }
-    if (draftCount() >= MAX_OPEN_DRAFTS) {
+    const ip = clientIp(req);
+    if (draftCount() >= MAX_OPEN_DRAFTS || (draftsByIp.get(ip)?.size ?? 0) >= MAX_DRAFTS_PER_IP) {
       json(res, 503, { error: "busy", message: "Too many people are writing at once. Try again in a little while." });
       return;
     }
     const draft = createDraft(token);
+    draftsByIp.set(ip, (draftsByIp.get(ip) ?? new Set()).add(draft.id));
     publish({ type: "draft", data: { id: draft.id, glyph: sealGlyph(token) } });
     json(res, 201, { id: draft.id, strokes: 0 });
     return;
@@ -204,12 +229,16 @@ const server = createServer(async (req, res) => {
         json(res, 409, { error: "sealed", message: "this colophon is already sealed" });
         return;
       }
+      forgetDraft(id);
       publish({ type: "sealed", data: { id } });
       json(res, 200, { id });
       return;
     }
 
-    if (abandonDraft(id, token)) publish({ type: "abandoned", data: { id } });
+    if (abandonDraft(id, token)) {
+      forgetDraft(id);
+      publish({ type: "abandoned", data: { id } });
+    }
     json(res, 200, { id });
     return;
   }
@@ -279,6 +308,21 @@ const server = createServer(async (req, res) => {
 
   res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
   res.end("not found");
+}
+
+// A client that drops mid-body makes readBody throw "aborted"; uncaught, that
+// rejection would end the process for every visitor (spec/aborted-request).
+// Nobody is left to answer, so close what's left of the exchange.
+const server = createServer((req, res) => {
+  handle(req, res).catch((err: unknown) => {
+    if (!(err instanceof Error && err.message === "aborted")) console.error(err);
+    if (!res.headersSent && !res.destroyed) {
+      res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("something went wrong");
+    } else {
+      res.destroy();
+    }
+  });
 });
 
 server.listen(PORT, "0.0.0.0", () => {

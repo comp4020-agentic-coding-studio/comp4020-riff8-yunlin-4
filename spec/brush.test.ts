@@ -150,3 +150,9 @@ it("with no script, / still has the painting, the scroll, the transcript and the
   for (const p of doc.querySelectorAll(".panel--sealed")) expect(p.hasAttribute("hidden")).toBe(false);
   expect(doc.querySelectorAll(".colophon-list > li").length).toBe(doc.querySelectorAll(".panel--sealed").length);
 });
+
+it("a draft is only opened for a browser that already holds a seal", async () => {
+  const res = await post(baseUrl, "/api/drafts", {});
+  expect(res.status).toBe(409);
+  expect(res.data.error).toBe("no-seal");
+});

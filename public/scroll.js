@@ -263,8 +263,9 @@ const handlers = {
     await draftPromise?.catch(() => {});
     if (id !== draftId) draftPanel(id, glyph);
   },
-  stroke({ colophonId, strokeId, points, t, c }) {
+  async stroke({ colophonId, strokeId, points, t, c }) {
     if (c && ownNonces.has(c)) return;
+    await draftPromise?.catch(() => {});
     const target = colophonId === draftId ? surface : draftPanel(colophonId)?.querySelector("svg");
     if (target) addPath(target, points, strokeId, t);
     if (target === surface) refreshForm();
@@ -300,13 +301,20 @@ const handlers = {
 let lastId = scroller.dataset.eventId;
 let source = null;
 
+// Events are handled one at a time, in the order they arrived, even when a
+// handler waits (for this page's own draft id, or a sealed sheet's HTML), so
+// a stroke can't overtake the draft it belongs to and two sheets sealed close
+// together can't land in the wrong order.
+let handling = Promise.resolve();
+
 function connect() {
   if (source) return;
   source = new EventSource(`/events?since=${encodeURIComponent(lastId)}`);
   for (const [type, handle] of Object.entries(handlers)) {
     source.addEventListener(type, (event) => {
       if (event.lastEventId) lastId = event.lastEventId;
-      handle(JSON.parse(event.data));
+      const data = JSON.parse(event.data);
+      handling = handling.then(() => handle(data)).catch(() => {});
     });
   }
 }

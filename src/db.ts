@@ -93,6 +93,7 @@ const abandonIfDrafting = db.prepare(
   "UPDATE colophons SET state = 'abandoned' WHERE id = ? AND token = ? AND state = 'drafting'",
 );
 const abandonById = db.prepare("UPDATE colophons SET state = 'abandoned' WHERE id = ? AND state = 'drafting'");
+const deleteStrokes = db.prepare("DELETE FROM strokes WHERE colophon_id = ?");
 
 const toStroke = (r: StrokeRow): Stroke => ({ ...r, points: JSON.parse(r.points) as number[] });
 
@@ -150,11 +151,16 @@ export function sealDraft(id: number, token: string, body: string): boolean {
   return Number(sealIfDrafting.run(Date.now(), body, id, token).changes) === 1;
 }
 
+// An abandoned draft is never shown again, so its ink isn't kept either.
 export function abandonDraft(id: number, token: string): boolean {
-  return Number(abandonIfDrafting.run(id, token).changes) === 1;
+  const done = Number(abandonIfDrafting.run(id, token).changes) === 1;
+  if (done) deleteStrokes.run(id);
+  return done;
 }
 
 // The sweeper's half of abandonment: false if the draft was sealed meanwhile.
 export function abandonStaleDraft(id: number): boolean {
-  return Number(abandonById.run(id).changes) === 1;
+  const done = Number(abandonById.run(id).changes) === 1;
+  if (done) deleteStrokes.run(id);
+  return done;
 }

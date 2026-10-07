@@ -40,6 +40,12 @@ next run.
 
 ## Next
 
-- [ ] SSE response shape spec (event-stream, no-store, retry)
+- [x] SSE response shape spec (event-stream, no-store, retry) (16:33)
+- [x] Review subagent findings (16:41): an aborted request body crashed the
+  process (predates this run; spec/aborted-request.test.ts); cookieless
+  scripts could take every draft slot (cookie required, 6 per address);
+  replay skipped the backpressure check; strokes on a stranger's draft could
+  be dropped while this page's own draft request was in flight (events now
+  handled one at a time, in order)
 - [x] Stretch: timelapse of every brushed colophon, from stroke timestamps (16:41)
 - [x] Ink that reads as brushed (public/ink.js, 16:30)
