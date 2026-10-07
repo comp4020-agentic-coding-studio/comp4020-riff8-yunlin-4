@@ -1,4 +1,4 @@
-# Brief: Colophon becomes a scroll people paint together, in real time
+# Brief: colophons are brushed by hand, and you can watch them being written
 
 You have about 4 hours, unattended, start to finish. Nobody will answer
 questions, so wherever something is ambiguous, pick the option closest to the
@@ -6,91 +6,11 @@ README's argument, record the choice in the ADR or `PROCESS.md`, and carry on.
 Keep `main` deployable after every commit. Delete this file (`prompt.md`) in
 your last commit.
 
-You are extending "Colophon", an existing small web app in this repo. Before
-writing any code, read `README.md`, `CLAUDE.md`, `PROCESS.md`, `spec/` and skim
-`src/`, so you understand the architecture, conventions, test setup (vitest)
-and deploy setup (`Dockerfile`, `fly.toml`). The `CLAUDE.md` harness rules and
-`PROCESS.md` win over anything below if they conflict. Write a short plan into
-`PROCESS.md` (or the ADR) before building; don't wait for confirmation.
-
-## Track your progress (do this first)
-
-Four hours is long enough to lose the thread. Before writing any code, create
-a todo list with your task-tracking tool, if you have one (otherwise a
-checklist in a scratch file such as `PROGRESS.md`, not committed or deleted
-before the last commit). Break the work into small, verifiable items drawn
-from the scope below, in priority order, each with a clear "done" test: for
-example "strip table and stroke validation, with unit tests green", "SSE
-endpoint with replay, spec green", "two-browser liveness spec green".
-
-- Mark one item in progress at a time, and tick it only when its check passes
-  (`pnpm check`, plus the browser check for UI items).
-- Note the time at the start and write the elapsed time next to each tick, so
-  you can see whether you're on budget. At about the 2-hour mark and again at
-  3 hours, re-read the list, cut from the bottom of the scope if you're behind,
-  and make sure the ADR, specs and reflection are not the items being squeezed.
-- Add items as you discover them (a bug, a spec for it) instead of holding
-  them in your head. Re-read the list after any long tool run or context
-  reset, and treat it as the source of truth for what's next.
-- Reserve the last 30 minutes for deploy, README, `PROCESS.md`, the
-  reflection and the final commit. Don't start new features then.
-
-## Manage your context (this run is long)
-
-The main agent for this run should be Opus 5.5, for its long context window.
-Whoever launches the run sets the model, so if you find you're on something
-else, carry on and note it in `PROCESS.md`. Even so, four hours will fill any
-context window, so manage it on purpose rather than waiting for compaction.
-
-- **Keep the main agent as the orchestrator.** It holds the plan, the todo
-  list, the design decisions and the final say. It reads the brief, writes the
-  ADR, reviews results and commits.
-- **Delegate token-heavy work to subagents** (the Agent tool, if you have it)
-  and keep only their conclusions. Good candidates:
-  - building a self-contained piece (the stroke module and its unit tests, the
-    SSE endpoint, the canvas script);
-  - running the browser loop: driving strokes, taking screenshots, reading
-    them against the rubric and reporting back pass/fail with what to fix;
-  - running `pnpm check`, reading long test output or logs and reporting only
-    the failures and likely causes;
-  - broad searching or reading across `src/` and `spec/`.
-  Run independent subagents in parallel where nothing depends on each other
-  (for example specs for sealing alongside the SSE endpoint), but not two
-  agents editing the same file.
-- **Brief subagents fully.** They don't see this conversation. Give each one
-  the goal, the files to read, the `CLAUDE.md` harness rules that apply (escape
-  everything, no editing sealed content, `--seal` means "yours", works with JS
-  off), the exact check that means done, and what to return: a short summary
-  and the list of files changed, not file dumps. Review their diff before you
-  accept it, and re-run `pnpm check` yourself.
-- **Handle failed or hung subagents.** Don't wait on one indefinitely, and
-  don't accept a result you haven't checked.
-  - If a subagent errors, returns nothing, or reports success but the check
-    fails when you run it, retry once with a narrower brief (one file or one
-    failing test, the error text included).
-  - If it's still running far past what the task should take (about 20
-    minutes for a build task, 10 for a test run or search), stop it and treat
-    that as a failure. Background tasks stuck on a dev server or a browser
-    that never exits are the usual cause, so make sure the brief says to
-    start servers with a timeout and shut them down.
-  - After the retry fails, do the work yourself in small steps, or cut the
-    item and note it in the todo list and `PROCESS.md`. Don't loop a third
-    time, and don't let one stuck item eat the budget.
-  - If a subagent edited files and then failed, check `git status` and `git
-    diff` and revert or finish its partial changes before moving on, so `main`
-    never gets half a feature.
-- **Keep your own tool output small.** Pipe long output through `tail` or
-  `grep`, read file ranges rather than whole files, and don't paste a
-  screenshot or log you've already judged back into the conversation.
-- **Anchor to the prompt and the todo list after compaction.** Compaction
-  summaries drop detail. After any compaction, context reset or long
-  interruption, before doing anything else: re-read this file (`prompt.md`
-  stays in the repo until your last commit), re-read the todo list and the ADR
-  and `PROCESS.md` notes, check `git log` and `git status`, then continue from
-  the first unticked item. Treat these over your memory of the work. Keep the
-  todo list current enough that this works: each item says what's done, what's
-  next and any decision made, and the ADR records every design decision as you
-  make it, not at the end.
+**Every push to `main` deploys.** The repo is public: CI
+(`.github/workflows/checks.yml`) builds the Docker image, runs `pnpm check`
+against it, runs `pnpm check:evidence`, and deploys to Fly only if all of that
+is green. Commit often, but push only at green, stable points, and never push
+half a feature.
 
 ## The crit brief this answers (crit 9, "All at once")
 
@@ -101,222 +21,307 @@ Source: https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/crits/09-
 (`/api/crits/09-all-at-once.json` has the spec lines verbatim). Done means:
 
 1. A change one person makes appears in every other open session within about
-   a second, with no reload, on the deployed app.
+   a second, with no reload, on the deployed app. **This is the pass condition.
+   It is never the thing that gets cut.**
 2. One decision about how the app behaves when several people use it at once is
-   made and written down in the repo, with the options considered and what the
-   choice costs (an architecture decision record, `docs/adr/0001-<slug>.md`).
-   The pod will argue for the option that wasn't picked, so the reasoning has
-   to hold up against the README.
+   made and written down, with the options considered and what the choice
+   costs, as an architecture decision record in `docs/adr/0001-<slug>.md`. The
+   pod will argue for the option you didn't pick, so the reasoning has to hold
+   up against the README.
 3. The repo shows the process: commits that grow with the work, `PROCESS.md`
-   updated, `reflections/crit-9.md` written (what you directed, grounded and
-   corrected).
+   updated, `reflections/crit-9.md` written.
 
 ## Goal
 
-Turn the scroll into something people paint together. Visitors extend the
-handscroll with new painted strips. A strip is a draft until enough distinct
-visitors co-sign it, and then it is permanently attached to the scroll.
-Visitors painting the same open strip see each other live.
+A colophon stops being a typed line and becomes what it was on a real
+handscroll: an inscription brushed by hand and closed with the writer's seal.
+A visitor draws a short inscription or signature in ink in a fixed-size margin
+panel, then seals it, and it joins the scroll permanently, after the painting
+and every colophon before it. While someone is brushing, everyone else with the
+page open watches the ink appear stroke by stroke, the way you'd watch someone
+write in a guest book across the room.
+
+This is a better fit for the README than it might look: historically,
+colophons were calligraphy, written by hand after the painting and finished
+with a seal. The typed line stays, as the way to write a colophon without
+JavaScript and as the text alternative for a drawn one.
 
 ## Where the app is now
 
-A ~350-line Node 24 server (`src/server.ts`, raw `node:http`, no framework)
-with `node:sqlite` on a `/data` volume. `GET /` renders the whole page
-server-side (`src/render.ts`): one painting image (`public/scroll.avif`) and
-the colophon list; `POST /colophons` appends a line and 303-redirects. Fly runs
-exactly one 256 MB shared-cpu machine that auto-stops when idle (`fly.toml`:
-leave its shape alone). One dependency (`marked`).
+A ~350-line Node 24 server (`src/server.ts`, raw `node:http`, no framework, Node
+runs the `.ts` directly) with `node:sqlite` on a `/data` volume. `GET /` renders
+the page server-side (`src/render.ts`): one painting (`public/scroll.avif`) in a
+short horizontal scroller, and the colophon list below it; `POST /colophons`
+appends a typed line and 303-redirects. Requests over 16 KB are rejected
+(`spec/request-limits.test.ts`). Fly runs exactly one 256 MB shared-cpu machine
+that auto-stops when idle (`fly.toml`: leave its shape alone). One dependency
+(`marked`). The agent that built it kept a hand-off in `memory/now.md` and
+durable lessons in `memory/MEMORY.md`; read both.
 
-## Design principles (from the README, keep these)
+## The design
 
-- No accounts, avatars, profiles, likes, replies or feeds. A visitor is only
-  the anonymous seal their browser is given on first visit. Co-signing is not
-  a like: it is a threshold that decides whether a strip exists at all, shows
-  no counts to rank anything, and nobody sees a leaderboard.
-- Sealed content is permanent: no editing or deleting once a strip is
-  attached; never auto-truncate or silently mutate what someone made. Reject
-  at the boundary instead.
-- Constraints are a feature: a small, considered tool, not a drawing app.
-- The app answers to the people who use it, not to growth. Prefer less
-  technology.
-- `--seal` keeps its one meaning, "this is yours" (your colophons, and now
-  strips you drew or co-signed). Other visitors' presence marks must not use
-  it; don't add a second accent colour.
+### Principles (from the README and `CLAUDE.md`, they bind you)
+
+- No accounts, avatars, profiles, names, likes, replies, threads, feeds or
+  notifications. A visitor is only the anonymous seal their browser is given.
+  No one stamps or endorses anyone else's colophon (that would be a like).
+- Sealed is permanent: no editing, deleting or auto-truncating a sealed
+  colophon, typed or drawn. Reject at the boundary instead.
+- Constraints are a feature: a small, considered brush, not a drawing app.
+  Prefer less technology.
+- `--seal` keeps its one meaning, "this colophon is yours". Reuse the existing
+  `.colophon--mine` class for your drawn colophons, so `spec/accent.test.ts`
+  keeps holding. Other people's live drafts must not use `--seal`. Don't add a
+  second accent colour. Ink is ink-coloured.
 - Every user-supplied string reaches HTML only through `escapeHtml`, including
-  anything pushed over the live channel. Strokes are numeric data, so
-  validate them as numbers rather than trusting the client.
-- The reading page must still work with JavaScript off: the painting, sealed
-  strips (render them server-side as inline SVG built from the stored strokes,
-  or similar) and the colophon form all work without script. The canvas, live
-  strokes and presence are progressive enhancements on top of that.
+  anything pushed over the live channel. Strokes are numbers: validate their
+  shape and ranges on the server rather than trusting the client.
+- With JavaScript off, the page still works: the painting, every sealed
+  colophon (drawn ones rendered server-side as inline SVG from the stored
+  strokes) and the typed-line form. The brush, live drafts and presence are
+  progressive enhancements.
 
-## Scope, in priority order
+### The model (decided; build to this)
 
-### 1. Strip model, canvas, storage, stitching (~2 hrs)
+- **A colophon** has an optional typed line (≤320 characters, today's rules)
+  and an optional drawing, and needs at least one of them. Without JS you can
+  only type. With JS you draw, and may type a line too; that line becomes the
+  drawing's text alternative. A drawing without one gets an alt like
+  "A brushed inscription, sealed 鑑, 7 October 2026". Keep the existing
+  `colophons` rows readable; add columns or tables, don't rewrite old data.
+- **The brush:** a fixed panel (pick a size that reads as a colophon sheet,
+  taller than wide), one ink colour, a cap on strokes per colophon and points
+  per stroke. Size the caps so one stroke per request stays well under the
+  16 KB limit. Pointer events, works on touch.
+- **Stroke format:** compact integer point arrays in panel coordinates, a
+  per-stroke timestamp, a format version. Design this first and write it down;
+  rendering, live updates, replay and the timelapse stretch all depend on it.
+- **Lifecycle:** `drafting` → `sealed`, or `drafting` → `abandoned`.
+  - A visitor has at most one draft at a time. Only the seal that owns a draft
+    (checked against the cookie) can add strokes to it or seal it.
+  - Sealing is the writer's own act ("Seal it" button) and makes it permanent.
+    Sealing twice (a double click, two tabs) must seal exactly once, in one
+    SQLite transaction or a single conditional `UPDATE`.
+  - A draft with no new stroke for a set window (one config constant, default
+    10 minutes) is abandoned and never shown again. It was never ink on the
+    scroll, so dropping it doesn't break permanence; say so in the README.
+  - Sealed colophons reject further strokes with a clear error.
+- **Where they go:** sealed colophons join the scroll in order of sealing.
+  Real handscrolls read right to left, with colophons mounted after the
+  painting at the left end. Look at how `scroll.avif` is laid out and at the
+  current page, and choose whether drawn colophons continue the scroll itself
+  (the scroller will need to be taller) or sit in the list below it. Record
+  the choice in the ADR.
+- **Live:** server-sent events over plain `node:http` (no new dependency), with
+  strokes sent as plain `POST`s. Everyone with the page open sees each draft
+  appear as a faint, unsealed panel marked with its writer's seal glyph
+  (`src/seal.ts`), filling in stroke by stroke, and then settling into the
+  scroll when it's sealed. Never broadcast the raw seal token. Whether a
+  colophon is "mine" is decided per viewer against their own cookie: the
+  server sends the glyph and an id, not ownership. A reconnecting client
+  replays everything it missed by last event id (`Last-Event-ID`), with
+  nothing lost or duplicated. Bound the streams for 256 MB and auto-stop:
+  heartbeat, idle timeout, a connection cap, no per-connection buffers that
+  grow. One machine means in-memory broadcast reaches everyone; say what
+  would change to scale out.
 
-- A strip is a fixed-width vertical slice of painting added to the right end
-  of the scroll.
-- Hard constraints: fixed strip dimensions, a palette of one or two ink
-  colours, a cap on strokes per strip and a cap on points per stroke.
-- Stroke format: compact point arrays with a per-stroke timestamp and a
-  version field. Design this first (put it in the ADR or a short doc), because
-  rendering, presence and replay all depend on it.
-- Canvas UI: brush drawing on the open strip (pointer events, works on touch),
-  with the last few centimetres of the previous strip visible as an edge
-  reference.
-- Persistence: strokes survive restarts and are returned on the next request,
-  in the existing `node:sqlite` database (add tables; don't touch the
-  `colophons` table's shape).
-- Scroll renderer: stitch the existing painting plus all sealed strips into
-  one horizontally scrolling view, with the open strip at the right end.
+### The decision for the ADR (yours to make)
 
-### 2. Co-signed sealing (~1 hr)
+What other people see while someone writes. For example:
+- every stroke live, as above;
+- only a quiet "someone is writing" mark until it's sealed (it's private until
+  it's ink);
+- nothing until it's sealed.
 
-- Strips have states: draft, sealed, expired.
-- A draft becomes sealed only when N distinct seals co-sign it (N is one
-  config constant, default 3). A seal can co-sign a strip once.
-- Drafts expire after a configurable window if they never reach N.
-- Once sealed, a strip is immutable. Reject any later stroke or edit with a
-  clear error.
-- The threshold check must be safe under concurrent co-signs: two simultaneous
-  signatures must not double count or seal twice (do it in one SQLite
-  transaction or a single atomic statement; see
-  `spec/colophon-concurrency.test.ts` for how this repo already tests races).
-- The no-JS fallback for co-signing is a plain form post, like the colophon
-  form.
+There are related questions under the same heading:
+- What happens when several people are writing at once? Their drafts appear
+  side by side, but the order on the scroll is by sealing, not by starting.
+- Do readers who aren't writing appear at all?
+- What does someone see when they come back tomorrow?
 
-### 3. Presence and live strokes on the open strip (~45 min)
+The model above assumes live strokes. If your ADR argues for something
+quieter, the crit still needs a change that reaches others within a second
+(sealing, at minimum), so keep that part live whatever you choose.
 
-- Use the simplest real-time channel that works. Server-sent events over plain
-  `node:http` for server-to-client, plain `POST` for strokes, is the expected
-  shape and needs no new dependency; choose a WebSocket only if you can justify
-  it in the ADR.
-- Show other current visitors as anonymous seals on the open strip, and show
-  their strokes live. The seal glyph comes from `src/seal.ts`; never broadcast
-  the raw seal token (derive what viewers need, per viewer: "mine" is decided
-  against the viewer's own cookie, not by the server telling everyone).
-- Presence expires via heartbeat. Reconnecting clients must backfill missed
-  strokes (replay by last-seen id, e.g. `Last-Event-ID`) without losing or
-  duplicating any.
-- Fly: `fly.toml` runs a single machine, so in-memory broadcast reaches all
-  clients. Say so in the ADR and note what would have to change to scale out.
-  Open streams keep an auto-stopped machine awake and live in 256 MB, so
-  bound them: heartbeat, idle timeout, a cap on connections, no
-  per-connection buffers that grow.
-- The ADR's central decision is yours to make here: what is live and what
-  waits (strokes live while someone is painting vs. only on seal), whether and
-  how presence shows, what happens when two people paint the same spot at once
-  (strokes are appended, so both land; say so), and what a returning visitor
-  sees. Justify against the README.
+## Build order (a thin slice first, then widen)
 
-### 4. Deploy and reflection (~30 min)
+Build the riskiest path end to end before polishing any part of it:
 
-- Verify the Docker build and `fly.toml` still work with the new channel (the
-  Dockerfile copies only `src`, `public`, `README.md`; add anything the
-  runtime now needs).
-- Add `reflections/crit-9.md` following the format already in `reflections/`,
-  and update `PROCESS.md` as it asks.
-- Update `README.md` where it now contradicts the app (it currently says
-  real-time belongs to a later crit, and says nothing about painting), in the
-  same commit as the change that makes it untrue. Keep its headings, since
-  `spec/invariants.test.ts` checks them in order.
+1. **Read and rewrite the argument.** Read `README.md`, `CLAUDE.md`,
+   `PROCESS.md`, `memory/`, `spec/`, `src/`, `.github/workflows/checks.yml`.
+   `CLAUDE.md`'s harness says a change that breaks the README's argument must
+   change the argument first, so rewrite "What good means here" and "What I
+   chose not to build" for brushed colophons and live writing. The README
+   currently says real-time belongs to a later crit; it's this one. Keep every
+   existing heading, in order (`spec/invariants.test.ts` checks them). Write
+   the ADR skeleton and the stroke format.
+2. **Walking skeleton.** Store a stroke, broadcast it over SSE, and show it in
+   a second tab within a second. Add the CI-safe liveness spec (below). Commit
+   and push once green: from here the crit's pass condition is live.
+3. **The brush and sealing:** the panel, caps and validation, ownership, seal
+   exactly once, sealed rejects strokes, server-rendered SVG for sealed
+   colophons, the no-JS path, alt text, `--seal` on your own.
+4. **Reconnect and replay, stream limits, abandonment.**
+5. **Presence and polish:** a draft's seal glyph, how drafts settle into the
+   scroll, phone layout.
+6. **Finish (reserve the last 30 minutes):** see "Finishing" below.
 
-### Stretch (only if time remains, in this order)
+**Stretch, only if time remains:** a timelapse of the scroll being written,
+from stroke timestamps.
 
-- A one-line (max 320 characters) inscription attached to each sealed strip,
-  reusing the existing colophon logic and its escaping and length rules.
-- A timelapse replay of the scroll growing, from stroke timestamps.
+**If you're behind, cut in this order:** the stretch, then presence polish,
+then abandonment (leave drafts open indefinitely and say so), then the phone
+layout polish. Never cut the live path, the specs for what you built, the ADR,
+the README rewrite or the reflection, and never leave `main` red.
 
-### Explicitly out of scope
+**Out of scope:** accounts, likes or endorsements, replies, editing or
+deleting sealed content, notifications, colours beyond ink and the existing
+accent, an undo for sealed work (undo within a draft is fine but optional).
 
-Accounts, likes, comments, editing or deleting sealed content, notifications,
-anchored notes, linked-verse mode.
+## Specs
 
-## Specs (`spec/`, vitest, against the running app over HTTP)
+`pnpm check` runs every `spec/**/*.test.ts` against the running app, in CI
+against the Docker image, and **CI has no browser.** So everything in `spec/`
+must work over plain HTTP: use `fetch` with a streamed response body to read
+SSE. Browser tests live outside `spec/` (see "Testing the UI").
 
-Write tests alongside each feature. At minimum:
+Write tests alongside each feature, at least:
+- A stroke posted on one stream's behalf arrives on another open SSE stream
+  within about a second (the crit's condition, without a browser).
+- Strokes are still there on the next request, and a sealed colophon renders
+  in `/`'s HTML as SVG with no script.
+- Strokes over the caps, out of range or malformed are rejected rather than
+  silently corrupted (and a sealed colophon is never mutated).
+- Only the owner's cookie can add strokes to a draft or seal it.
+- A sealed colophon rejects further strokes. Two concurrent seal requests seal
+  it once (see `spec/colophon-concurrency.test.ts` for how this repo already
+  tests races).
+- A reconnect with `Last-Event-ID` replays exactly the missed events, with no
+  duplicates.
+- Your colophons are marked as yours and nobody else's are. The seal token
+  never appears in any SSE payload or in another visitor's HTML.
+- With no script, `/` still has the painting, every sealed colophon and the
+  typed form, and a typed colophon still works.
+- Abandonment: test the rule as a pure function with an injected clock (the
+  running app's clock can't be fast-forwarded).
 
-- A stroke saved now is still there on the next request.
-- Strokes over the stroke or point cap, or in the wrong format, are rejected
-  rather than silently corrupted.
-- A draft is not sealed with fewer than N distinct seals, and the same seal
-  signing twice counts once.
-- A sealed strip rejects further strokes.
-- Concurrent co-signs seal exactly once.
-- An expired draft cannot be sealed.
-- A client that reconnects receives missed strokes without duplicates.
-- A stroke posted in one request arrives on another open stream within about
-  a second.
-- Strips a visitor drew or signed are identifiable as theirs, and nobody
-  else's are; the seal token never appears in what's sent to others.
-- With no script, `/` still returns the painting, sealed strips and both forms.
+Note in `PROCESS.md` what can't be tested, for example whether watching
+someone write feels like company or like surveillance. A bug found along the
+way gets its own spec or a new rule in `CLAUDE.md`'s harness section (leave the
+riff block at the top alone). The old specs keep passing unless a change
+genuinely supersedes one; then edit it deliberately and say so in the commit
+message. Don't delete tests to get green. `spec/invariants.test.ts` must stay
+green.
 
-Note in a comment or in `PROCESS.md` which qualities can't be tested (for
-example whether painting together actually feels collaborative). A bug found
-along the way gets its own spec test or a new rule in the `CLAUDE.md` harness
-section (leave the riff block at the top alone).
+## Testing the UI (the brush and live drafts need eyes)
 
-The old specs (`accent`, `colophon`, `colophon-concurrency`, `cookie-safety`,
-`layout`, `request-limits`, `static-files`) were written for the old brief.
-Keep them green unless a change genuinely supersedes one (for example
-`static-files` when new asset types are served); then edit it deliberately and
-say so in the commit message. Don't delete tests to get green.
-`spec/invariants.test.ts` must stay green: `/` returns 200 and `/readme/`
-publishes the full README.
-
-## Testing the UI (the canvas and live painting need eyes, not just unit tests)
-
-Passing unit tests don't show that painting works. Build a loop that uses the
+Passing unit tests don't show that drawing works. Build a loop that uses the
 real UI and looks at the result.
 
-- **Drive a real headless browser.** Add Playwright (or Puppeteer) as a
-  `devDependency` only: the Dockerfile installs with `--prod`, so the image
-  stays small. `jsdom` has no real pointer or canvas behaviour, so it can't
-  test painting. If no browser can be launched, say so in `PROCESS.md` and
-  test through the HTTP and SSE layer instead; don't skip silently.
-- **Keep logic out of the canvas script.** Stroke validation, caps, point
-  encoding, sealing and replay live in plain modules with unit tests. The
-  client script stays thin, so most of the feature is testable without a
-  browser.
+- **Use a real browser, locally only.** Add `playwright-core` as a
+  devDependency and launch the installed Chrome (`channel: "chrome"`), which
+  avoids a browser download and pnpm 11's install-script blocking
+  (`pnpm-workspace.yaml` `allowBuilds`). Put browser tests in `e2e/`, run by a
+  separate `pnpm e2e` script, never in `spec/`. If no browser launches, say so
+  in `PROCESS.md` and rely on the HTTP specs. Don't skip silently.
+- **Keep logic out of the client script.** Stroke validation, caps, encoding,
+  lifecycle and replay live in plain modules with unit tests. The script that
+  handles pointer events and the SSE connection stays thin.
 - **Make the UI assertable as DOM, not pixels.** Render strokes as SVG paths
-  with stable hooks (`data-strip-id`, `data-stroke-id`, `data-state`, and a
-  `data-mine` marker). Tests then assert "the other browser shows 3 paths in
-  strip 7" rather than comparing images.
-- **Loop after each UI change:** drive a stroke with real pointer events
-  (mouse, and touch emulation at a phone viewport), take a screenshot, read
-  it, check it against the rubric below, fix. Cap this at about 3 rounds per
-  feature; 4 hours doesn't leave room for polishing.
-- **Test liveness with two browser contexts** on the same server: draw in one,
-  assert the path appears in the other within about a second. This is the
-  crit's pass condition, so make it a spec in `spec/`. Also drop and restore
-  the network on one context to exercise reconnect and replay, and run a pass
-  with JavaScript disabled.
-- **Rubric for screenshots.** An agent looking at a screenshot with no
-  criteria says "looks good", so check these explicitly:
-  - the edge reference from the previous strip lines up with the open strip;
-  - ink stays inside the strip's bounds;
-  - the open strip is visibly different from sealed ones, with no second
-    accent colour;
-  - other visitors' presence marks don't use `--seal`;
-  - nothing overflows sideways at 375px wide (the page still scrolls the
-    scroll, not the whole page);
-  - it still looks like the handscroll, not a drawing app.
-- Keep screenshots in a gitignored folder (add it to `.gitignore`), not in
-  the repo. In `reflections/crit-9.md`, list what you judged visually rather
-  than tested.
+  with stable hooks (`data-colophon-id`, `data-stroke-id`, `data-state`), so a
+  test can assert "the other tab shows 3 paths in colophon 12".
+- **Loop after each UI change:** drive strokes with real pointer events (mouse,
+  plus touch emulation at a 390px viewport), screenshot, read the image, check
+  it against the rubric, fix. Cap it at about 3 rounds per feature.
+- **Two browser contexts:** draw in one, see it in the other within a second.
+  Drop and restore one context's network to check replay. Run one pass with
+  JavaScript disabled.
+- **Rubric for screenshots** (with no criteria an agent always says "looks
+  good"):
+  - ink stays inside the panel;
+  - a draft is visibly unsealed, and a sealed colophon looks settled;
+  - `--seal` appears only on your own colophons;
+  - nothing scrolls the whole page sideways at 390px;
+  - drawn and typed colophons sit together as one scroll;
+  - it reads as a handscroll, not a drawing app.
+- Screenshots go in a gitignored folder (add it to `.gitignore`).
 
-## Working rules
+## Track your progress
 
-- Small steps, run `pnpm check` after each one, commit logically as you go.
-- Keep the diff small and consistent with the existing code style and comment
-  density. No new dependency unless clearly needed; if you add one, say why in
-  the ADR.
-- If something here conflicts with what you find in the repo, don't stop:
-  follow the repo and `CLAUDE.md`, and record the conflict and your resolution
-  in `PROCESS.md`.
-- If time runs short, cut from the bottom of the scope list, never the specs,
-  the ADR or the reflection, and never leave `main` broken.
-- Leave alone: the shape of `fly.toml`, the scroll image, the seal glyph
-  scheme, `escapeHtml`'s behaviour, and the top riff block of `CLAUDE.md`.
-- At the end, put a summary in `reflections/crit-9.md`: what was built, what
-  was cut, what's untested, and the decisions a human should review.
+Four hours is long enough to lose the thread. Before writing code:
+
+- Run `date` and write the start time down.
+- Write the plan as a checklist in `memory/now.md`, the hand-off file this
+  agent already uses (mirror it in your task tool if you have one; the file is
+  what survives). Use small items in build order, each with its done check,
+  e.g. "SSE liveness spec green", "seal-once spec green, pushed".
+- Work one item at a time. Tick an item only when its check passes, and write
+  the time (from `date`) next to it. Add items (bugs, specs for them) as they
+  turn up.
+- At about 2 hours and 3 hours, run `date`, compare against the build order,
+  and cut using the cut order above if you're behind.
+- Commit `memory/now.md` with the work. It's process evidence too.
+
+## Manage your context
+
+Run this as Opus 5.5 for its long context window; whoever launches the run sets
+the model, so if you're on something else, carry on and note it in
+`PROCESS.md`. Four hours fills any context window, so manage it on purpose.
+
+- **The main agent orchestrates.** It holds the plan, the checklist and the
+  decisions, writes the ADR and README, reviews every change and is the only
+  one that commits or pushes.
+- **Delegate token-heavy work to subagents** and keep only their conclusions:
+  building a self-contained module and its tests, the browser loop and
+  screenshot review, reading long `pnpm check` output, broad reads across the
+  repo. Run independent ones in parallel, never two on the same file.
+- **Brief subagents fully.** They don't see this file. Give each the goal, the
+  files, the harness rules that apply (escape everything, sealed is permanent,
+  `--seal` means yours, works with JS off, no browser tests in `spec/`), the
+  exact done check, and what to return: a short summary and the files
+  changed. Tell them not to commit, and to start servers with a timeout and
+  stop them. Review the diff and re-run `pnpm check` yourself.
+- **Failed or hung subagents:**
+  - If one errors, returns nothing, or claims success but the check fails,
+    retry once with a narrower brief that includes the error text.
+  - If one runs far past what its task should take (check with `date`; about
+    20 minutes for a build task, 10 for a test run), stop it and count that as
+    a failure.
+  - After one retry, do the work yourself in small steps or cut the item.
+    Note it in `memory/now.md`.
+  - If one left partial edits, check `git status` and `git diff`, and finish or
+    revert them before going on.
+- **Keep your own tool output small.** Pipe long output through `tail` or
+  `grep`, read file ranges, and don't paste back a screenshot or log you've
+  already judged.
+- **After any compaction, reset or long interruption**, before anything else:
+  re-read this file, `memory/now.md`, the ADR and `CLAUDE.md`'s harness rules,
+  check `git log --oneline -15` and `git status`, run `date`, and continue
+  from the first unticked item. Trust these files over your memory of the
+  work. To make that possible, keep `memory/now.md` current (done, next,
+  decisions made), and write each design decision into the ADR when you make
+  it, not at the end.
+
+## Finishing
+
+- `pnpm check` green against the built Docker image if Docker is available
+  (CI's setup: `docker build`, then `docker run` with `--tmpfs /data`).
+  Otherwise run it against `pnpm start`. Also run `pnpm check:evidence`: it
+  fails if `PROCESS.md` cites a commit SHA that doesn't exist in this repo, so
+  cite only SHAs from this repo's `git log`.
+- `PROCESS.md`: add the crit 9 work. Include what was built, what was cut,
+  what's untested and the decisions a human should review.
+- `reflections/crit-9.md`: follow `reflections/README.md` (the two standing
+  prompts, 150–300 words). Don't use it as a changelog.
+- `memory/now.md`: hand off for the next run (crit 10, "Fly by instruments").
+- Final commit deletes `prompt.md`. Push, then `gh run watch` the CI run to
+  the end. If it's red, fix and push again. When it's green, check that the
+  live site serves `/` and that a drawn colophon round-trips. Don't leave
+  test colophons on the live scroll.
+
+## Leave alone
+
+The shape of `fly.toml`, the painting image, the seal glyph scheme,
+`escapeHtml`'s behaviour, the CI workflow, and the riff block at the top of
+`CLAUDE.md`. Add no dependency beyond `playwright-core` (dev only) unless the
+ADR argues for it.
