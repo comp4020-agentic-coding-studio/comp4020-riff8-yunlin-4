@@ -41,7 +41,7 @@ export interface WithStrokes {
 
 function ink(strokes: Stroke[], className: string, extra = ""): string {
   const paths = strokes
-    .map((st) => `<path data-stroke-id="${st.id}" d="${brushPath(st.points)}" />`)
+    .map((st) => `<path data-stroke-id="${st.id}" data-t="${st.t}" d="${brushPath(st.points)}" />`)
     .join("");
   return `<svg class="${className}" viewBox="0 0 ${PANEL_WIDTH} ${PANEL_HEIGHT}" aria-hidden="true"${extra}>${paths}</svg>`;
 }
@@ -148,12 +148,14 @@ export function renderIndex({ sealed, drafts, ownToken, eventId, error }: IndexV
           Wang Yi, <cite>Portrait of Yang Zhuxi</cite>, 1363 — Ni Zan painted the pine and
           rock. Palace Museum, Beijing. A handscroll reads right to left: scroll left past
           the painting and six and a half centuries of colophons to the ones written here.
+          <span class="js-only" hidden><button type="button" class="link-button" data-timelapse>Watch the
+            colophons being brushed again</button></span>
         </figcaption>
       </figure>
 
       <section aria-labelledby="write-heading">
         <h2 id="write-heading">Add yours</h2>
-        <p class="section-note brush-only" hidden>
+        <p class="section-note js-only" hidden>
           Brush on the blank sheet at the scroll's left end, then seal it. Anyone else with the
           scroll open watches your brush as you write. A sealed colophon can't be changed or taken
           back; an unsealed one left for ten minutes is set aside.

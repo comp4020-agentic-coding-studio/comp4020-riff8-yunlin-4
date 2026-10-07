@@ -40,6 +40,6 @@ next run.
 
 ## Next
 
-- [ ] Ink that reads as brushed, not drawn with a marker
 - [ ] SSE response shape spec (event-stream, no-store, retry)
-- [ ] Stretch: watch a sealed colophon being written again, from stroke timestamps
+- [x] Stretch: timelapse of every brushed colophon, from stroke timestamps (16:41)
+- [x] Ink that reads as brushed (public/ink.js, 16:30)

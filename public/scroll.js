@@ -24,13 +24,14 @@ const bodyLabel = form.querySelector("[data-body-label]");
 const status = document.querySelector("[data-brush-status]");
 const list = document.querySelector(".colophon-list");
 
-for (const el of document.querySelectorAll(".panel--draft, [data-brush], .brush-only")) el.hidden = false;
+for (const el of document.querySelectorAll(".panel--draft, [data-brush], .js-only")) el.hidden = false;
 
-function addPath(svg, points, strokeId) {
+function addPath(svg, points, strokeId, t) {
   if (strokeId && svg.querySelector(`[data-stroke-id="${strokeId}"]`)) return null;
   const path = document.createElementNS(SVG, "path");
   path.setAttribute("d", brushPath(points));
   if (strokeId) path.dataset.strokeId = String(strokeId);
+  if (t) path.dataset.t = String(t);
   svg.append(path);
   return path;
 }
@@ -191,6 +192,45 @@ document.querySelector("[data-goto-brush]").addEventListener("click", () => {
   brush.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
 });
 
+// ---- watching it written again ----
+
+// Replays every brushed colophon on the scroll, stroke by stroke, in the
+// order they were sealed, with the pauses between strokes taken (shortened)
+// from when each stroke actually arrived.
+const timelapseButton = document.querySelector("[data-timelapse]");
+let replaying = null;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+timelapseButton.addEventListener("click", async () => {
+  if (replaying) {
+    replaying.stopped = true;
+    return;
+  }
+  const run = (replaying = { stopped: false });
+  const panels = [...track.querySelectorAll(".panel--sealed")].filter((p) => p.querySelector("path"));
+  const paths = panels.flatMap((p) => [...p.querySelectorAll("path")]);
+  const smooth = matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  timelapseButton.textContent = "Stop";
+  for (const path of paths) path.classList.add("unwritten");
+  for (const panel of panels) {
+    if (run.stopped) break;
+    panel.scrollIntoView({ behavior: smooth, inline: "center", block: "nearest" });
+    await sleep(600);
+    let prev = null;
+    for (const path of panel.querySelectorAll("path")) {
+      if (run.stopped) break;
+      const t = Number(path.dataset.t);
+      await sleep(prev === null ? 0 : Math.min(700, Math.max(90, (t - prev) / 3)));
+      path.classList.remove("unwritten");
+      prev = t;
+    }
+    await sleep(500);
+  }
+  for (const path of paths) path.classList.remove("unwritten");
+  timelapseButton.textContent = "Watch the colophons being brushed again";
+  replaying = null;
+});
+
 // ---- live ----
 
 function draftPanel(id, glyph) {
@@ -223,10 +263,10 @@ const handlers = {
     await draftPromise?.catch(() => {});
     if (id !== draftId) draftPanel(id, glyph);
   },
-  stroke({ colophonId, strokeId, points, c }) {
+  stroke({ colophonId, strokeId, points, t, c }) {
     if (c && ownNonces.has(c)) return;
     const target = colophonId === draftId ? surface : draftPanel(colophonId)?.querySelector("svg");
-    if (target) addPath(target, points, strokeId);
+    if (target) addPath(target, points, strokeId, t);
     if (target === surface) refreshForm();
   },
   async sealed({ id }) {

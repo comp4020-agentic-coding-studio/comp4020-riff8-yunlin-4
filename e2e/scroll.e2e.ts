@@ -168,6 +168,22 @@ try {
     await other.close();
   });
 
+  await step("the timelapse brushes every sealed colophon again, then leaves them all inked", async () => {
+    const paths = reader.locator(".panel--sealed path");
+    const total = await paths.count();
+    assert.ok(total >= 6);
+    assert.ok(await reader.locator(".panel--sealed path[data-t]").count() === total, "every stroke carries its time");
+    await reader.locator("[data-timelapse]").click();
+    await reader.waitForTimeout(300);
+    assert.ok((await reader.locator(".panel--sealed path.unwritten").count()) > 0);
+    await reader.waitForTimeout(1200);
+    await reader.screenshot({ path: `${SHOTS}/09-timelapse.png` });
+    await reader.waitForFunction(() => document.querySelector("[data-timelapse]")!.textContent !== "Stop", null, {
+      timeout: 15000,
+    });
+    assert.equal(await reader.locator(".unwritten").count(), 0);
+  });
+
   await step("start over abandons the draft for everyone", async () => {
     await brushStroke(writer, [[100, 100], [140, 140]]);
     await writer.waitForFunction(() => document.querySelector("[data-brush]")!.hasAttribute("data-colophon-id"));

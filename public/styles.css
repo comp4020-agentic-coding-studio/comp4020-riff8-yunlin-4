@@ -176,6 +176,14 @@ h2 {
   opacity: 0.6;
 }
 
+.ink path {
+  transition: opacity 0.25s ease-out;
+}
+
+.ink .unwritten {
+  opacity: 0;
+}
+
 .panel--arriving {
   animation: arrive 0.6s ease-out;
 }
@@ -201,6 +209,10 @@ h2 {
   .panel--arriving,
   .panel--settling {
     animation: none;
+  }
+
+  .ink path {
+    transition: none;
   }
 }
 
