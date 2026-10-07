@@ -1,7 +1,8 @@
 import { escapeHtml } from "./html.ts";
 import { sealGlyph } from "./seal.ts";
 import type { Colophon, Stroke } from "./db.ts";
-import { pathData, PANEL_HEIGHT, PANEL_WIDTH } from "./strokes.ts";
+import { PANEL_HEIGHT, PANEL_WIDTH } from "./strokes.ts";
+import { brushPath } from "../public/ink.js";
 
 const dateFmt = new Intl.DateTimeFormat("en-AU", {
   day: "numeric",
@@ -40,7 +41,7 @@ export interface WithStrokes {
 
 function ink(strokes: Stroke[], className: string, extra = ""): string {
   const paths = strokes
-    .map((st) => `<path data-stroke-id="${st.id}" d="${pathData(st.points)}" />`)
+    .map((st) => `<path data-stroke-id="${st.id}" d="${brushPath(st.points)}" />`)
     .join("");
   return `<svg class="${className}" viewBox="0 0 ${PANEL_WIDTH} ${PANEL_HEIGHT}" aria-hidden="true"${extra}>${paths}</svg>`;
 }

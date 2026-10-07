@@ -92,8 +92,12 @@ try {
     });
     assert.equal(await writer.locator("[data-brush-surface] path").count(), 3);
     assert.equal(await writer.locator(".panel--draft").count(), 0, "the writer sees their own draft as someone else's");
-    const first = await writer.locator("[data-brush-surface] path").first().getAttribute("d");
-    assert.match(first!, /^M40 60L.*L200 70$/, `first stroke drifted: ${first}`);
+    // The first stroke ran from x=40 to x=200 in panel units; if the brush
+    // moved under the pen mid-stroke, its ink lands somewhere else.
+    const bbox = await writer.locator("[data-brush-surface] path").first().evaluate((p) => { const b = (p as SVGPathElement).getBBox(); return { x: b.x, y: b.y, width: b.width, height: b.height }; });
+    assert.ok(bbox.x > 30 && bbox.x < 45 && bbox.x + bbox.width > 195 && bbox.x + bbox.width < 210, `first stroke drifted: ${JSON.stringify(bbox)}`);
+    const readerD = await reader.locator(`${draftSel(id)} path`).first().getAttribute("d");
+    assert.equal(readerD, await writer.locator("[data-brush-surface] path").first().getAttribute("d"));
     assert.equal(await writer.locator("[data-submit]").textContent(), "Seal it");
     await writer.locator("[data-brush]").screenshot({ path: `${SHOTS}/02-writer-brush.png` });
     await reader.locator(draftSel(id)).scrollIntoViewIfNeeded();
@@ -103,9 +107,8 @@ try {
   await step("ink stays inside the panel", async () => {
     await brushStroke(writer, [[230, 380], [300, 500]]);
     await writer.waitForTimeout(300);
-    const d = await writer.locator("[data-brush-surface] path").last().getAttribute("d");
-    for (const n of d!.match(/\d+/g)!.map(Number)) assert.ok(n <= 400);
-    assert.match(d!, /L240 400$/);
+    const bbox = await writer.locator("[data-brush-surface] path").last().evaluate((p) => { const b = (p as SVGPathElement).getBBox(); return { x: b.x, y: b.y, width: b.width, height: b.height }; });
+    assert.ok(bbox.x + bbox.width <= 240 + 6 && bbox.y + bbox.height <= 400 + 6, JSON.stringify(bbox));
   });
 
   await step("a hidden reader catches up on what it missed when it comes back", async () => {
@@ -213,7 +216,7 @@ try {
     await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     await page.waitForFunction(() => document.querySelector("[data-brush-surface] path[data-stroke-id]"));
     const d = await page.locator("[data-brush-surface] path").first().getAttribute("d");
-    assert.ok(d!.split("L").length > 4, `touch stroke has too few points: ${d}`);
+    assert.ok(d!.split("L").length > 8, `touch stroke has too few points: ${d}`);
     const overflowAfter = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(overflowAfter <= 0);
     await page.screenshot({ path: `${SHOTS}/08-phone-brush.png` });

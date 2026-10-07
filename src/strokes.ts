@@ -35,14 +35,6 @@ export function parseStroke(input: unknown): StrokeInput | string {
   return { points: points as number[], nonce: c as string | undefined };
 }
 
-export function pathData(points: readonly number[]): string {
-  let d = `M${points[0]} ${points[1]}`;
-  // A single point still needs a segment for the round cap to draw a dot.
-  if (points.length === 2) return `${d}L${points[0]} ${points[1]}`;
-  for (let i = 2; i < points.length; i += 2) d += `L${points[i]} ${points[i + 1]}`;
-  return d;
-}
-
 export function isAbandoned(lastActivity: number, now: number, after = ABANDON_AFTER_MS): boolean {
   return now - lastActivity >= after;
 }

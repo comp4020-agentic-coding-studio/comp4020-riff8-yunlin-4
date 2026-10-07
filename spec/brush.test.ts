@@ -1,6 +1,7 @@
 import { JSDOM } from "jsdom";
 import { expect, inject, it } from "vitest";
 import { draft, page, post, stroke, visitor, type Visitor } from "./helpers.ts";
+import { brushPath } from "../public/ink.js";
 
 // Brushed colophons: the stroke format and caps from ADR 0001, who may touch a
 // draft, sealing exactly once, and what a page with no script shows.
@@ -35,7 +36,7 @@ it("strokes persist, and a sealed colophon is in / as SVG ink with no script nee
   expect(panel.hasAttribute("hidden")).toBe(false);
   expect(panel.getAttribute("data-state")).toBe("sealed");
   const paths = [...panel.querySelectorAll("svg path")].map((p) => p.getAttribute("d"));
-  expect(paths).toEqual(["M10 20L30 40", "M200 380L200 380"]);
+  expect(paths).toEqual([brushPath([10, 20, 30, 40]), brushPath([200, 380])]);
   expect(panel.getAttribute("aria-label")).toMatch(/^A brushed inscription, sealed ., /);
 });
 

@@ -4,6 +4,8 @@
 // lifecycle all live on the server (src/strokes.ts); this only draws, posts
 // and listens. Panel size, caps and the stroke format match the ADR.
 
+import { brushPath } from "./ink.js";
+
 const W = 240;
 const H = 400;
 const MAX_POINTS = 400;
@@ -24,17 +26,10 @@ const list = document.querySelector(".colophon-list");
 
 for (const el of document.querySelectorAll(".panel--draft, [data-brush], .brush-only")) el.hidden = false;
 
-const pathData = (p) => {
-  let d = `M${p[0]} ${p[1]}`;
-  if (p.length === 2) return `${d}L${p[0]} ${p[1]}`;
-  for (let i = 2; i < p.length; i += 2) d += `L${p[i]} ${p[i + 1]}`;
-  return d;
-};
-
 function addPath(svg, points, strokeId) {
   if (strokeId && svg.querySelector(`[data-stroke-id="${strokeId}"]`)) return null;
   const path = document.createElementNS(SVG, "path");
-  path.setAttribute("d", pathData(points));
+  path.setAttribute("d", brushPath(points));
   if (strokeId) path.dataset.strokeId = String(strokeId);
   svg.append(path);
   return path;
@@ -131,7 +126,7 @@ surface.addEventListener("pointermove", (event) => {
   const p = active.points;
   if (Math.hypot(x - p[p.length - 2], y - p[p.length - 1]) < 2) return;
   p.push(x, y);
-  active.path.setAttribute("d", pathData(p));
+  active.path.setAttribute("d", brushPath(p));
   if (p.length >= MAX_POINTS * 2) finishStroke(event);
 });
 
