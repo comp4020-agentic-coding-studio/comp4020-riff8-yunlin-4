@@ -75,3 +75,20 @@ what has to change first, in the same commit.
 - A stream response is written only through a guard that checks it hasn't
   ended, and ending a stream takes it out of every broadcast set first
   (`spec/match-robustness`).
+- The match server is authoritative: a client sends commands, never state,
+  and every command is validated against `src/sim/validate.ts` and rejected,
+  never clamped. Any id that isn't the commander's own live piece gets the one
+  `not-yours` answer, byte for byte (`spec/access`).
+- What a seat is sent is built only from `viewFor`/`eventsFor`: its own
+  pieces and what it sees now. Anything else that varies with hidden state
+  (ids, paths, refusal wording, timing) is a fog leak too; ADR 0002 lists
+  them, and a new one is a bug with a spec.
+- Every match number lives in `src/sim/balance.ts`; the bot plays only from
+  its seat's `SeatView`, never `SimState` (`spec/bot`).
+- Logs name people by mark only (`src/mark.ts`), never a token, cookie,
+  address, User-Agent, query string or anything a visitor typed or drew; no
+  route ever serves the logs. A refusal about ownership names both marks.
+  `scripts/narrate.ts` must still tell a stranger who did what after any
+  change to a log line (`e2e/match.e2e.ts`).
+- `--seal` never marks a unit, building or map mark; sides are told apart by
+  silhouette and glyph in ink.

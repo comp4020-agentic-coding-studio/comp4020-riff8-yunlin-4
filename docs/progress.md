@@ -44,7 +44,7 @@ alone; this file does its job.
 - [x] Access audit subagent; fixes with specs (crash, ids, slot, streams) (21:48)
 - [x] `scripts/narrate.ts` + spec; `docs/logs.md` (20:12, pulled forward: it only needs the log shapes)
 - [x] e2e crit scenario in two Chrome profiles, narrated from the log (21:22)
-- [ ] Round 3 verification
+- [x] Round 3: four verifiers, a fresh newcomer and UX reviewer; 13 findings verified by fresh testers, 13 new (7 major) all fixed (22:08)
 
 ### Finish (3:30–4:00)
 - [ ] PROCESS.md, reflections/crit-10.md

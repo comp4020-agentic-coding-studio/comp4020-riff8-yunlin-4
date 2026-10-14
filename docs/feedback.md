@@ -112,7 +112,7 @@ Repro: scroll-1 (any seed: no randomness); t1 `build 3,4,5,6 barracks 99 14`,
 t61 `gather 3,4,5,6 108 9`; stuck from t100.
 Triage: accepted → T-11. `build` on your own unfinished building resumes it.
 
-### F-14 [fixed] blocker · round 2 · audit · server
+### F-14 [verified] blocker · round 2 · audit · server
 What: any visitor holding a seat can crash the server for everyone: a match
 stream that reaches its 15-minute lifetime is ended but stays in the
 broadcast set, the next frame writes after end, and the unhandled stream
@@ -120,7 +120,7 @@ error kills the process. Confirmed live by the auditor.
 Triage: accepted → T-12. Guard every stream write, drop on end, `error`
 handler, spec with a short lifetime and a stalled reader, rule in CLAUDE.md.
 
-### F-15 [fixed] major · round 2 · audit · fog
+### F-15 [verified] major · round 2 · audit · fog
 What: one global id counter: a seat's own new ids jump by however many pieces
 the fogged enemy made in between (15, 20, 24, 28), so it can read the enemy's
 production through the fog.
@@ -133,7 +133,7 @@ sending a command every four minutes.
 Triage: accepted → T-14 (one small, documented remedy; no lobby or queue,
 which the README rules out).
 
-### F-17 [fixed] major · round 2 · audit · streams
+### F-17 [verified] major · round 2 · audit · streams
 What: stream caps (100, 10 per address) can be filled by others, cutting a
 seated player off.
 Triage: accepted → T-14 (a seated token is always admitted; a per-token cap).
@@ -176,7 +176,7 @@ Status line scrolls away; focus ring faint; buttons read as UI boxes.
 Triage: accepted → T-18 (sticky HUD, 2px focus ring); button restyle deferred
 (the rest of the site uses the same plain buttons).
 
-### F-24 [fixed] minor · round 2 · audit · fog
+### F-24 [verified] minor · round 2 · audit · fog
 Pathing into fog plans around hidden enemy buildings; attack-validation
 timing differs for existing ids. Triage: accepted → T-13.
 
@@ -216,13 +216,13 @@ status line and crosshair when a mode is armed; say what Unroll leads to).
 Hills read as squiggles; no legend; map loads half below the fold.
 Triage: accepted → T-19 (one ink legend line; scroll the map into view).
 
-### F-31 [fixed] blocker · round 2 · adversary (and audit, F-15) · fog
+### F-31 [verified] blocker · round 2 · adversary (and audit, F-15) · fog
 Unit ids show how much the enemy built (17 → 21 after three hidden labourers).
 Same finding as F-15, found independently from outside; fixed by per-side id
 sequences before this report arrived. Raises F-15's weight; verified by
 `spec/sim-fog` (seat 1's production never shifts seat 0's ids).
 
-### F-32 [fixed] major · round 2 · adversary · slot
+### F-32 [verified] major · round 2 · adversary · slot
 What: create a match and walk away: everyone else gets 409 for ten real
 minutes, and the same person can create again at once.
 Triage: accepted → T-20. An unjoined match waits three minutes, not ten
@@ -318,3 +318,16 @@ grove misses (worst at 390px). Triage: accepted → T-23 (space reserved).
 ### F-46 minor · round 3 · newcomer3 · touch
 Phone play is only good for the first minute. Triage: deferred: the brief
 says desktop first, touch is a stretch.
+
+Round 3 adversary (fresh, outside only), verifying security findings:
+- F-15/F-31 [verified]: own ids identical whether the enemy trains 0, 3 or 10.
+- F-14 [verified]: 40 stalled readers through ten steps, 200 unread streams,
+  slow-loris and aborted posts: the server stayed up.
+- F-17 [verified]: with 230 streams open a seated player still got theirs.
+- F-24 [verified]: hidden, gap, creature and nonexistent attack targets
+  identical in body, headers and timing; a move into fog walks straight
+  past an unseen hall.
+- F-32 [verified]: an unjoined match lapses at ~180 s and the slot frees.
+  Residual: one person who keeps commanding can hold the single slot for as
+  long as a match lasts (ten minutes against the bot before it yields).
+  Minor, by design (ADR 0003); for a human to review.
