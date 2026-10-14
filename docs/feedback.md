@@ -104,7 +104,7 @@ Results so far: economist won at 9:55, rusher lost at 8:14, explorer lost at
 9:10 and was losing at 6:43. Round 1's F-1 (too short) reads fixed: all three
 matches ran 8–10 minutes. The explorer claimed the relic first try (F-4).
 
-### F-13 [open] blocker · round 2 · rusher · building
+### F-13 [fixed] blocker · round 2 · rusher · building
 What: a barracks left at 93% when its labourers were sent to gather could
 never be finished; `build` on the spot was refused ("a building is in the
 way") and `train` "still being built". 200 grain lost.
@@ -112,7 +112,7 @@ Repro: scroll-1 (any seed: no randomness); t1 `build 3,4,5,6 barracks 99 14`,
 t61 `gather 3,4,5,6 108 9`; stuck from t100.
 Triage: accepted → T-11. `build` on your own unfinished building resumes it.
 
-### F-14 [open] blocker · round 2 · audit · server
+### F-14 [fixed] blocker · round 2 · audit · server
 What: any visitor holding a seat can crash the server for everyone: a match
 stream that reaches its 15-minute lifetime is ended but stays in the
 broadcast set, the next frame writes after end, and the unhandled stream
@@ -120,32 +120,32 @@ error kills the process. Confirmed live by the auditor.
 Triage: accepted → T-12. Guard every stream write, drop on end, `error`
 handler, spec with a short lifetime and a stalled reader, rule in CLAUDE.md.
 
-### F-15 [open] major · round 2 · audit · fog
+### F-15 [fixed] major · round 2 · audit · fog
 What: one global id counter: a seat's own new ids jump by however many pieces
 the fogged enemy made in between (15, 20, 24, 28), so it can read the enemy's
 production through the fog.
 Triage: accepted → T-13. Ids from per-side sequences; spec that seat 1's
 production never shifts seat 0's ids.
 
-### F-16 [open] major · round 2 · audit · slot
+### F-16 [fixed] major · round 2 · audit · slot
 What: one visitor can hold the only match slot forever against the bot by
 sending a command every four minutes.
 Triage: accepted → T-14 (one small, documented remedy; no lobby or queue,
 which the README rules out).
 
-### F-17 [open] major · round 2 · audit · streams
+### F-17 [fixed] major · round 2 · audit · streams
 What: stream caps (100, 10 per address) can be filled by others, cutting a
 seated player off.
 Triage: accepted → T-14 (a seated token is always admitted; a per-token cap).
 
-### F-18 [open] major · round 2 · economist · bot
+### F-18 [fixed] major · round 2 · economist · bot
 What: the bot never defends its base once its waves are out; the economist
 walked into an empty base. Turtling won "too easily".
 Triage: accepted → T-15 (home guard, waves muster before crossing). Checked
 against the other reports: the rusher and explorer still lost to the bot, so
 this is about defence, not about weakening its attack.
 
-### F-19 [open] major · round 2 · economist, explorer, rusher · warning
+### F-19 [fixed] major · round 2 · economist, explorer, rusher · warning
 What: labourers raided at an out-of-view grove died with no warning; "enemy
 in view" never announced; the rusher's text client showed "nothing new" while
 units died (events missing in their client).
@@ -153,12 +153,12 @@ Triage: accepted → T-16. Warn when your units are attacked anywhere and when
 enemy soldiers first come into view; investigate the rusher's empty event list
 (its client may have kept a stale last-tick after `step`).
 
-### F-20 [open] major · round 2 · explorer · pixiu
+### F-20 [fixed] major · round 2 · explorer · pixiu
 What: the pixiu's loop is unreadable from play; it was seen well off the fords.
 Triage: accepted → T-17 (the rules say its loop in map terms; the page and
 text client show which way it is heading).
 
-### F-21 [open] major · round 2 · UX · legibility
+### F-21 [fixed] major · round 2 · UX · legibility
 What: side is carried by a tiny 東 mark only; grain marks on groves read as
 creatures; creatures never seen in three minutes so "dangerous" unjudged.
 Triage: accepted → T-18 (own vs enemy silhouettes stronger, grove marks softer).
@@ -171,12 +171,12 @@ does exactly that (remembered = pale ink on toned silk, in view = full ink on
 bright silk); the reviewer read paper tone as ink. Kept, but T-18 checks the
 contrast reads that way.
 
-### F-23 [open] minor · round 2 · UX · controls
+### F-23 [fixed] minor · round 2 · UX · controls
 Status line scrolls away; focus ring faint; buttons read as UI boxes.
 Triage: accepted → T-18 (sticky HUD, 2px focus ring); button restyle deferred
 (the rest of the site uses the same plain buttons).
 
-### F-24 [open] minor · round 2 · audit · fog
+### F-24 [fixed] minor · round 2 · audit · fog
 Pathing into fog plans around hidden enemy buildings; attack-validation
 timing differs for existing ids. Triage: accepted → T-13.
 
@@ -197,7 +197,7 @@ Triage: accepted → T-10.
 Surplus grain at the pop cap has nothing to buy. Deferred: one resource, one
 soldier type is the brief's scope.
 
-### F-28 [open] blocker · round 2 · newcomer · seats
+### F-28 [fixed] blocker · round 2 · newcomer · seats
 What: the browser page went blank mid-match (the testing tool, most likely),
 and on return with a new seal the newcomer saw only "A match is under way",
 locked out of their own match with no explanation.
@@ -206,12 +206,32 @@ a lost cookie is a new person, by design, and nothing can hand the seat back
 without accounts the README rules out. The page says so, and that the
 abandoned seat forfeits after five idle minutes, freeing the scroll.
 
-### F-29 [open] major · round 2 · newcomer · onboarding
+### F-29 [fixed] major · round 2 · newcomer · onboarding
 What: the how-to-play is in a collapsed panel; mode buttons (Gather, Order,
 Build) arm silently; "Play the bot" was a surprise second step.
 Triage: accepted → T-19 (visible first-steps line until the first order; a
 status line and crosshair when a mode is armed; say what Unroll leads to).
 
-### F-30 [open] minor · round 2 · newcomer · legibility
+### F-30 [fixed] minor · round 2 · newcomer · legibility
 Hills read as squiggles; no legend; map loads half below the fold.
 Triage: accepted → T-19 (one ink legend line; scroll the map into view).
+
+### F-31 [fixed] blocker · round 2 · adversary (and audit, F-15) · fog
+Unit ids show how much the enemy built (17 → 21 after three hidden labourers).
+Same finding as F-15, found independently from outside; fixed by per-side id
+sequences before this report arrived. Raises F-15's weight; verified by
+`spec/sim-fog` (seat 1's production never shifts seat 0's ids).
+
+### F-32 [open] major · round 2 · adversary · slot
+What: create a match and walk away: everyone else gets 409 for ten real
+minutes, and the same person can create again at once.
+Triage: accepted → T-20. An unjoined match waits three minutes, not ten
+(enough to send a friend the link), and the creator can't recreate a match
+that just lapsed while someone else has tried to create one in that window.
+
+### F-33 [open] minor · round 2 · adversary · rules
+The idle forfeit runs on the wall clock, not game time (visible only under
+manual ticks). Triage: rejected for the deployed game, where game time and the
+wall clock are the same 4 ticks a second; under manual ticks wall-clock idle is
+the right rule, since the tester is the clock. ADR 0003 says "five minutes" of
+real time. Rules text says "five minutes", consistent.
