@@ -37,6 +37,7 @@ alone; this file does its job.
 - [x] T-20 (F-32, major) an unjoined match lapses after three minutes — done when: spec with short env
 
 ### M3 — hold up (2:30–3:30)
+- [x] Docker image with `--tmpfs /data`: `pnpm check` 373 green, log file on /data, 55 MiB with a live bot match, no token in the log (21:53)
 - [x] Access audit subagent; fixes with specs (crash, ids, slot, streams) (21:48)
 - [x] `scripts/narrate.ts` + spec; `docs/logs.md` (20:12, pulled forward: it only needs the log shapes)
 - [x] e2e crit scenario in two Chrome profiles, narrated from the log (21:22)
@@ -44,7 +45,7 @@ alone; this file does its job.
 
 ### Finish (3:30–4:00)
 - [ ] PROCESS.md, reflections/crit-10.md
-- [ ] `pnpm check` against the Docker image with `--tmpfs /data`; `pnpm check:evidence`
+- [ ] `pnpm check` against the final Docker image with `--tmpfs /data`; `pnpm check:evidence`
 - [ ] prompt.md deleted in the last commit
 
 ## Found along the way
