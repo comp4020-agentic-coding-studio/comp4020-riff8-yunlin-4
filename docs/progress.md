@@ -1,62 +1,49 @@
-# Crit 9 run: progress
+# Crit 10 run: progress
 
-Start: Wed 07 Oct 2026 16:01 AEDT (one unattended pod run, about four hours).
+Start: Wed 14 Oct 2026 20:01 AEDT (one unattended pod run, about four hours).
+Orchestrator: Opus 5.5. Implementation by subagents; the orchestrator writes
+docs and glue, reviews every diff, and is the only one who commits.
 
-This checklist lives here rather than in `memory/now.md`, which `prompt.md`
-names: the crit agent's doctrine says pod runs leave `memory/` alone, since
-the agent's own ticks own it. Same purpose, a file the run is allowed to
-touch.
-
-No git remote in this clone, and the doctrine says pod runs neither push nor
-deploy (the harness pushes when the run stops, CI deploys). So "push" below
-means "commit at a green point"; the live-URL checks are left to CI and the
-next run.
+No git remote in this clone, and the crit agent's doctrine says pod runs
+neither push nor deploy (the harness pushes when the run stops, CI deploys).
+So "push" below means "commit at a green point"; the live checks are left to
+CI and the next run. `memory/` belongs to the agent's own ticks and is left
+alone; this file does its job.
 
 ## Checklist (build order)
 
-- [x] README rewritten for brushed colophons and live writing; headings kept (invariants green) (16:13)
-- [x] ADR 0001 skeleton + stroke format written down (16:13)
-- [x] Walking skeleton: stroke stored on own draft, broadcast over SSE; liveness spec green (16:21)
-- [x] Brush panel, caps and validation specs green (16:22)
-- [x] Ownership spec green (only the owner adds strokes / seals) (16:22)
-- [x] Seal exactly once (concurrent seal spec green); sealed rejects strokes (16:22)
-- [x] Sealed colophon renders as SVG in `/` with no script (16:22)
-- [x] Taller RTL scroller, colophons mounted as panels after the painting (16:27)
-- [x] Transcript list stays; old specs narrowed to it with jsdom (16:22)
-- [x] Reconnect replay by Last-Event-ID spec green; reset on unknown id (16:21)
-- [x] Stream limits: heartbeat, max lifetime, connection cap, backpressure drop, closed when the tab is hidden (16:21; the cap itself is untested, see PROCESS.md)
-- [x] Abandonment rule (pure function spec) + sweeper (16:22)
-- [x] Seal token never in SSE payload or another visitor's HTML (spec) (16:21)
-- [x] playwright-core e2e: two contexts, draw → see; JS-off pass; 390px (16:27)
-- [x] Screenshot loop against the rubric (16:27)
-- [x] Docker image `pnpm check` green (16:29; again three times on the final image, 16:38)
-- [x] PROCESS.md, reflections/crit-9.md, ADR final (16:37); prompt.md deleted in the last commit
+### Orient (0:00–0:25)
+- [x] Baseline `pnpm check` green, 49 tests (20:02)
+- [x] `src/sim/types.ts` contract written (20:04)
+- [ ] README rewritten, headings kept — done when: invariants green
+- [ ] ADR 0002, 0003 drafted — done when: files exist with the route table
+- [ ] `docs/feedback.md` created
+
+### M1 — headless match (0:25–1:30)
+- [ ] Sim core, map, creatures, fog, pathing, balance — done when: `spec/sim-*` green
+- [ ] `src/mark.ts`, `src/log.ts`, request/domain/refusal logging — done when: `spec/mark`, `spec/log*` green
+- [ ] Bot (same fogged view and commands) + bot-vs-bot soak — done when: soak spec green, matches end
+- [ ] Match lifecycle (`src/match.ts`), tables, routes, manual-tick mode refused under FLY_APP_NAME — done when: match server specs green
+- [ ] `scripts/play.ts`, `scripts/replay.ts` — done when: a tester can play a match from the shell
+- [ ] Round 1 playtest (economist, rusher, mythic explorer)
+
+### M2 — on the scroll (1:30–2:30)
+- [ ] Per-seat stream, `/match` page + `public/match.js`, seat/join, results, chronicle seal
+- [ ] `spec/access.test.ts` (table-driven against ADR 0002)
+- [ ] Log file + rotation on `/data/logs`
+- [ ] Triage round 1, fix blockers/majors
+- [ ] Link the game from the scroll page
+- [ ] Round 2 playtest (all six, plus a narrate-only reader)
+
+### M3 — hold up (2:30–3:30)
+- [ ] Access audit subagent; fixes with specs
+- [ ] `scripts/narrate.ts` + spec; `docs/logs.md`
+- [ ] e2e crit scenario (two contexts)
+- [ ] Round 3 verification
+
+### Finish (3:30–4:00)
+- [ ] PROCESS.md, reflections/crit-10.md
+- [ ] `pnpm check` against the Docker image with `--tmpfs /data`; `pnpm check:evidence`
+- [ ] prompt.md deleted in the last commit
 
 ## Found along the way
-
-- [x] Writer saw their own new draft as a stranger's and the brush jumped
-  mid-stroke (own `draft` event beat the `/api/drafts` response). Fixed in
-  `public/scroll.js`, asserted in `e2e/`, rule in CLAUDE.md (16:27)
-
-## Next
-
-- [x] SSE response shape spec (event-stream, no-store, retry) (16:33)
-- [x] Review subagent findings (16:34): an aborted request body crashed the
-  process (predates this run; spec/aborted-request.test.ts); cookieless
-  scripts could take every draft slot (cookie required, 6 per address);
-  replay skipped the backpressure check; strokes on a stranger's draft could
-  be dropped while this page's own draft request was in flight (events now
-  handled one at a time, in order)
-- [x] Stretch: timelapse of every brushed colophon, from stroke timestamps (16:32)
-- [x] Ink that reads as brushed (public/ink.js, 16:30)
-- [x] A brushed transcript entry's date fell into the seal's column (found
-  on a hand-drawn screenshot; spec/layout.test.ts) (16:35)
-- [x] e2e: an open page survives a server restart (16:37)
-
-## Hand-off
-
-Done: everything in the brief, including the timelapse stretch. Not done
-from here: push and deploy (the harness pushes; CI deploys), and the
-live-URL check the brief asks for. On the live app, draw a stroke in one
-browser and watch it arrive in a second, and seal nothing there. Next brief:
-crit 10, "Fly by instruments".

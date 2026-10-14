@@ -6,6 +6,9 @@ centuries: an inscription brushed by hand in ink and closed with the writer's
 seal, or a typed line for anyone without a brush. No account, no name, nothing
 that can be edited or deleted once it's sealed. While someone is brushing,
 everyone else with the page open watches the ink arrive stroke by stroke.
+And from the end of the painting a second scroll unrolls: 山海 *Mountains and
+Seas*, a small two-player strategy game played on a map that is itself a
+handscroll.
 
 ## What good means here
 
@@ -45,6 +48,63 @@ Three other things I read while deciding what small and good looks like here:
   for any individual score — there is no score here, no likes, nothing to
   win, only the quality of what gets left behind.
 
+## 山海, the second scroll
+
+Scrolls were unrolled in company (above), and a gathering round one could
+also be a contest: the painting read together, then argued over. 山海 is that
+argument made playable. Two people unroll a long strip of land from opposite
+ends, gather grain, raise a hall and a barracks, train spearmen and try to
+take the other's hall. The land between them belongs to neither side but to
+four creatures out of Chinese myth and folklore. Fog of war is unpainted
+silk: you see only what your own people have walked past, inked in as they
+go, and remembered ground stays inked lighter than ground in view. Everything
+is ink on silk, told apart by glyph and silhouette, never by colour.
+
+It belongs on this scroll rather than in another app because when a match
+ends either player may seal a short chronicle of it, written by the server
+from what happened, onto the scroll as their own colophon: a battle leaves a
+trace like any other inscription, and only if a player chooses to leave it.
+The painting and its colophons stay the front page; the match is reached from
+it and needs JavaScript. Seat one, the first to sit, starts in the east, at
+the right-hand end, because the scroll reads right to left.
+
+The creatures, each with the one rule a player can plan around:
+
+- 年 *nian*, the guardian: sleeps on the richest grove and attacks anything
+  that comes within its leash, then returns to its post and heals. The *nian*
+  is New Year folklore, not one of the classics: [the earliest written sources
+  that refer to it as a creature date to the early twentieth century](https://en.wikipedia.org/wiki/Nian).
+- 蛟龍 *jiaolong*, the ambusher: lurks in the river unseen, even inside your
+  vision, strikes units on or beside the river near it, then dives for a
+  while. A scaled water dragon of rivers and pools, named in the *Chu Ci*, the
+  *Classic of Mountains and Seas* and the *Shuowen* ([summary](https://en.wikipedia.org/wiki/Jiaolong)).
+- 麒麟 *qilin*, the pacifist: never attacks unless armed units enter its glade
+  or it is attacked; labourers gathering peacefully beside it work faster.
+  Legge's note on the *Shijing* has it that "the qilin's feet are not used to
+  harm any living thing, even grass" ([World History Encyclopedia](https://www.worldhistory.org/Qilin/)).
+- 貔貅 *pixiu*, the patroller: circles a fixed route round the relic site;
+  whoever brings a labourer to the relic while it is away claims a one-off
+  store of grain. A guardian of riches in later belief; its earliest name is
+  traced to the *Book of Han* ([summary](https://en.wikipedia.org/wiki/Pixiu)).
+
+`docs/adr/0002-who-may-see-and-change-what.md` decides what each person may
+see and change, fog included; `docs/adr/0003-how-a-match-behaves-with-several-people.md`
+how a match runs with several people at once.
+
+## Watching and being watched
+
+The scroll shows nobody who is only looking, and the match shows a third
+visitor only that a match is under way. The server does keep a log, and you
+should know what is in it. Each line names a person by their *mark*, their
+seal glyph and six characters derived one-way from their seal, which you can
+see on your own page and nobody else can; it records what was done (a
+colophon sealed, a match joined, a command of six spears, a refusal and
+whose thing it was refused on), never what you typed or drew, never your
+seal itself, your address or your browser. Only whoever runs the app can read
+it, through Fly's short rolling log and a capped file on the server's disk
+that keeps about the last sixteen megabytes and drops the oldest. Nothing on
+the site serves it. `docs/logs.md` says how it is read.
+
 ## What I chose not to build
 
 No accounts, avatars or profiles — a visitor is only the anonymous seal their
@@ -56,7 +116,8 @@ a visitor considers an inscription rather than filling a canvas. One brush,
 one ink, no colours, no tools: this is a margin, not a drawing app.
 
 No likes, no replies, no threading, no reader count, no cursors, no
-notifications. Nobody stamps anyone else's colophon. A draft nobody has added
+notifications. The game adds no names, lobbies, chat, spectators or replays
+shown to others: one match at a time, two seats, and a seat is a seal. Nobody stamps anyone else's colophon. A draft nobody has added
 a stroke to for ten minutes is abandoned and never shown again; that doesn't
 break the permanence rule, because a draft was never ink on the scroll until
 its writer sealed it. Only sealing is permanent.
