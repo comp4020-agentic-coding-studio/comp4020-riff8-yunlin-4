@@ -164,3 +164,133 @@ export function abandonStaleDraft(id: number): boolean {
   if (done) deleteStrokes.run(id);
   return done;
 }
+
+// 山海 matches (ADR 0003). A row holds what the record needs: map, seed, the
+// seats' marks (or "bot") and a full SHA-256 of each seat's token, so a player
+// can seal their chronicle after the match, even after a restart, without the
+// bearer token ever being stored. Commands are every applied command by tick.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS matches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    map_id TEXT NOT NULL,
+    seed INTEGER NOT NULL,
+    east TEXT NOT NULL,
+    west TEXT,
+    east_hash TEXT NOT NULL,
+    west_hash TEXT,
+    created_at INTEGER NOT NULL,
+    started_at INTEGER,
+    ended_at INTEGER,
+    winner INTEGER,
+    reason TEXT,
+    ticks INTEGER,
+    chronicle TEXT,
+    sealed_0 INTEGER NOT NULL DEFAULT 0,
+    sealed_1 INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS match_commands (
+    match_id INTEGER NOT NULL REFERENCES matches(id),
+    tick INTEGER NOT NULL,
+    seat INTEGER NOT NULL,
+    command TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS match_commands_by_match ON match_commands (match_id, tick);
+`);
+
+export interface MatchRow {
+  id: number;
+  map_id: string;
+  seed: number;
+  east: string;
+  west: string | null;
+  east_hash: string;
+  west_hash: string | null;
+  created_at: number;
+  started_at: number | null;
+  ended_at: number | null;
+  winner: number | null;
+  reason: string | null;
+  ticks: number | null;
+  chronicle: string | null;
+  sealed_0: number;
+  sealed_1: number;
+}
+
+const insertMatch = db.prepare(
+  "INSERT INTO matches (map_id, seed, east, east_hash, created_at) VALUES (?, ?, ?, ?, ?)",
+);
+const updateMatchWest = db.prepare("UPDATE matches SET west = ?, west_hash = ?, started_at = ? WHERE id = ?");
+const updateMatchEnd = db.prepare(
+  "UPDATE matches SET ended_at = ?, winner = ?, reason = ?, ticks = ?, chronicle = ? WHERE id = ? AND ended_at IS NULL",
+);
+const selectMatch = db.prepare("SELECT * FROM matches WHERE id = ?");
+const selectLatestMatch = db.prepare("SELECT * FROM matches ORDER BY id DESC LIMIT 1");
+const selectUnfinished = db.prepare("SELECT * FROM matches WHERE ended_at IS NULL ORDER BY id ASC");
+const selectLastTick = db.prepare("SELECT MAX(tick) AS t FROM match_commands WHERE match_id = ?");
+const insertMatchCommand = db.prepare("INSERT INTO match_commands (match_id, tick, seat, command) VALUES (?, ?, ?, ?)");
+const claimSeal = [
+  db.prepare("UPDATE matches SET sealed_0 = 1 WHERE id = ? AND sealed_0 = 0 AND ended_at IS NOT NULL"),
+  db.prepare("UPDATE matches SET sealed_1 = 1 WHERE id = ? AND sealed_1 = 0 AND ended_at IS NOT NULL"),
+];
+
+export function createMatchRow(mapId: string, seed: number, eastMark: string, eastHash: string): number {
+  return Number(insertMatch.run(mapId, seed, eastMark, eastHash, Date.now()).lastInsertRowid);
+}
+
+export function startMatchRow(id: number, westMark: string, westHash: string | null): void {
+  updateMatchWest.run(westMark, westHash, Date.now(), id);
+}
+
+export function endMatchRow(
+  id: number,
+  end: { winner: number | null; reason: string; ticks: number; chronicle: string },
+): void {
+  updateMatchEnd.run(Date.now(), end.winner, end.reason, end.ticks, end.chronicle, id);
+}
+
+export function getMatchRow(id: number): MatchRow | undefined {
+  return selectMatch.get(id) as unknown as MatchRow | undefined;
+}
+
+export function latestMatchRow(): MatchRow | undefined {
+  return selectLatestMatch.get() as unknown as MatchRow | undefined;
+}
+
+export function unfinishedMatchRows(): MatchRow[] {
+  return selectUnfinished.all() as unknown as MatchRow[];
+}
+
+export function lastCommandTick(id: number): number {
+  return Number((selectLastTick.get(id) as { t: number | null }).t ?? 0);
+}
+
+// One transaction per tick: a tick's commands land together or not at all.
+export function insertMatchCommands(id: number, tick: number, commands: { seat: number; command: unknown }[]): void {
+  if (commands.length === 0) return;
+  db.exec("BEGIN");
+  try {
+    for (const c of commands) insertMatchCommand.run(id, tick, c.seat, JSON.stringify(c.command));
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+}
+
+// Claims a seat's one chronicle seal and writes the colophon in one
+// transaction: of two racing requests, only one finds sealed_N still 0.
+export function sealChronicle(id: number, seat: 0 | 1, token: string, text: string): number | undefined {
+  db.exec("BEGIN");
+  try {
+    if (Number(claimSeal[seat]!.run(id).changes) !== 1) {
+      db.exec("ROLLBACK");
+      return undefined;
+    }
+    const colophon = addColophon(token, text);
+    db.exec("COMMIT");
+    return colophon;
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+}

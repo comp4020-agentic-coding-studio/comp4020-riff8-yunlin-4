@@ -25,6 +25,10 @@ import { isAbandoned, MAX_STROKES, parseStroke, STROKE_VERSION } from "./strokes
 import { sealGlyph } from "./seal.ts";
 import { markOf } from "./mark.ts";
 import { log, logError } from "./log.ts";
+import * as match from "./match.ts";
+import type { Outcome } from "./match.ts";
+import { renderMatchPage } from "./render-match.ts";
+import { RULES_TEXT } from "./rules-text.ts";
 
 // What each request knows about itself for the log: the matched route pattern
 // (never the raw path, which a client controls) and who, as a mark.
@@ -356,6 +360,65 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/match") {
+    ctx.route = "GET /match";
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(renderMatchPage({ rulesText: RULES_TEXT, ownMark: ctx.who, ownGlyph: sealGlyph(token) }));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/match") {
+    ctx.route = "GET /api/match";
+    json(res, 200, match.statusFor(token));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/match/events") {
+    ctx.route = "GET /match/events";
+    match.openMatchStream(req, res, token, clientIp(req), ctx.who);
+    return;
+  }
+
+  const matchAction = /^\/api\/match(?:\/(join|bot|command|forfeit|chronicle|step))?$/.exec(url.pathname);
+  if (req.method === "POST" && matchAction) {
+    const action = matchAction[1] ?? "create";
+    ctx.route = action === "create" ? "POST /api/match" : `POST /api/match/${action}`;
+    if (action === "step" && !match.MANUAL) {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("not found");
+      return;
+    }
+    const payload = await readJson(req);
+    if (payload === "large") {
+      deny(ctx, "large");
+      json(res, 413, { error: "large", message: "payload too large" });
+      return;
+    }
+    if (payload === undefined) {
+      deny(ctx, "malformed");
+      json(res, 400, { error: "malformed", message: "expected a JSON object" });
+      return;
+    }
+    // A seat belongs to a seal the browser already holds (forged cookies are
+    // replaced by sealToken, so they land here too).
+    if (setCookie) {
+      deny(ctx, "no-seal");
+      json(res, 409, { error: "no-seal", message: "Reload the page, then try again." });
+      return;
+    }
+    let out: Outcome;
+    if (action === "create") out = match.create(token);
+    else if (action === "join") out = match.join(token);
+    else if (action === "bot") out = match.bot(token);
+    else if (action === "command") out = match.command(token, ctx.who, payload, ctx.route);
+    else if (action === "forfeit") out = match.forfeit(token);
+    else if (action === "chronicle") out = match.sealOwnChronicle(token, payload);
+    else out = match.manualStep(token, payload);
+    if (out.deny) deny(ctx, out.deny.reason, out.deny.extra);
+    json(res, out.status, out.body);
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/readme/") {
     ctx.route = "GET /readme/";
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -399,7 +462,7 @@ const server = createServer((req, res) => {
   const ctx: Ctx = { route: "unmatched", who: "-" };
   const started = performance.now();
   res.on("close", () => {
-    if (ctx.route === "GET /public/*" || ctx.route === "GET /events") return;
+    if (ctx.route === "GET /public/*" || ctx.route === "GET /events" || ctx.route === "GET /match/events") return;
     log("request", {
       who: ctx.who,
       method: req.method ?? "-",
