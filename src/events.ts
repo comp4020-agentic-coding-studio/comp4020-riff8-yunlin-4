@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { log } from "./log.ts";
 
 // The live channel: server-sent events from one in-memory bus. Fly runs one
 // machine, so every open page is connected to this process (see the ADR for
@@ -46,7 +47,10 @@ export function clientCount(): number {
 // write() returning false means the socket's buffer is filling: this reader
 // isn't keeping up. Drop it rather than let its queue grow; it reconnects and
 // replays from its last id.
+const sentCount = new WeakMap<ServerResponse, number>();
+
 function send(res: ServerResponse, frame: string): boolean {
+  if (!frame.startsWith(":")) sentCount.set(res, (sentCount.get(res) ?? 0) + 1);
   if (res.write(frame)) return true;
   clients.delete(res);
   res.destroy();
@@ -74,8 +78,9 @@ export function replayFrom(lastId: string | undefined): string[] | "reset" {
   return buffer.filter((b) => b.seq > since).map((b) => b.frame);
 }
 
-export function openStream(req: IncomingMessage, res: ServerResponse, since: string | undefined, ip: string): void {
+export function openStream(req: IncomingMessage, res: ServerResponse, since: string | undefined, ip: string, who = "-"): void {
   if (clients.size >= MAX_CLIENTS || (perIp.get(ip) ?? 0) >= MAX_CLIENTS_PER_IP) {
+    log("denied", { who, reason: "busy", route: "GET /events" });
     res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Retry-After": "10" });
     res.end("too many open pages");
     return;
@@ -99,6 +104,8 @@ export function openStream(req: IncomingMessage, res: ServerResponse, since: str
   clients.add(res);
   perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
 
+  const openedAt = Date.now();
+  log("stream.open", { who, replayed: missed === "reset" ? "reset" : missed.length });
   const heartbeat = setInterval(() => send(res, ": hb\n\n"), HEARTBEAT_MS);
   const lifetime = setTimeout(() => res.end(), MAX_STREAM_MS);
   let closed = false;
@@ -108,6 +115,7 @@ export function openStream(req: IncomingMessage, res: ServerResponse, since: str
     clearInterval(heartbeat);
     clearTimeout(lifetime);
     clients.delete(res);
+    log("stream.close", { who, ms: Date.now() - openedAt, events: sentCount.get(res) ?? 0 });
     const left = (perIp.get(ip) ?? 1) - 1;
     if (left > 0) perIp.set(ip, left);
     else perIp.delete(ip);

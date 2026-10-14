@@ -1,3 +1,4 @@
+import { markOf } from "./mark.ts";
 import { escapeHtml } from "./html.ts";
 import { sealGlyph } from "./seal.ts";
 import type { Colophon, Stroke } from "./db.ts";
@@ -195,6 +196,7 @@ export function renderIndex({ sealed, drafts, ownToken, eventId, error }: IndexV
     <footer>
       <p>Your seal on this page is <strong>${sealGlyph(ownToken)}</strong> — remembered by
         your browser, not by a name. <a href="/readme/">Read more.</a></p>
+      <p class="own-mark">In the server's log you are <code>${markOf(ownToken)}</code>.</p>
     </footer>
     <script src="/public/scroll.js" type="module"></script>
   `;

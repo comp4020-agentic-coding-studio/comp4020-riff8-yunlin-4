@@ -23,6 +23,43 @@ import { renderMarkdown } from "./markdown.ts";
 import { currentEventId, openStream, publish } from "./events.ts";
 import { isAbandoned, MAX_STROKES, parseStroke, STROKE_VERSION } from "./strokes.ts";
 import { sealGlyph } from "./seal.ts";
+import { markOf } from "./mark.ts";
+import { log, logError } from "./log.ts";
+
+// What each request knows about itself for the log: the matched route pattern
+// (never the raw path, which a client controls) and who, as a mark.
+interface Ctx {
+  route: string;
+  who: string;
+}
+
+// A page's own draft strokes are logged as one line per draft per window, not
+// one per stroke, and flushed early when the draft is sealed or abandoned.
+const STROKE_LOG_MS = 10_000;
+const strokeLog = new Map<number, { count: number; who: string; timer: NodeJS.Timeout }>();
+
+function noteStroke(id: number, who: string): void {
+  const open = strokeLog.get(id);
+  if (open) {
+    open.count++;
+    return;
+  }
+  const timer = setTimeout(() => flushStrokes(id), STROKE_LOG_MS);
+  timer.unref();
+  strokeLog.set(id, { count: 1, who, timer });
+}
+
+function flushStrokes(id: number): void {
+  const open = strokeLog.get(id);
+  if (!open) return;
+  clearTimeout(open.timer);
+  strokeLog.delete(id);
+  log("draft.strokes", { who: open.who, id, count: open.count });
+}
+
+function deny(ctx: Ctx, reason: string, extra: Record<string, unknown> = {}): void {
+  log("denied", { who: ctx.who, reason, route: ctx.route, ...extra });
+}
 
 const PORT = Number(process.env.PORT ?? 8080);
 const README = readFileSync("README.md", "utf8");
@@ -81,6 +118,8 @@ function sweepAbandoned(now = Date.now()): void {
   for (const d of listDrafts()) {
     if (isAbandoned(d.last_activity ?? d.created_at, now) && abandonStaleDraft(d.id)) {
       forgetDraft(d.id);
+      flushStrokes(d.id);
+      log("draft.abandon", { id: d.id, by: "timeout", owner: markOf(d.token) });
       publish({ type: "abandoned", data: { id: d.id } });
     }
   }
@@ -119,12 +158,15 @@ async function readBody(req: import("node:http").IncomingMessage): Promise<strin
   return tooLarge ? undefined : Buffer.concat(chunks).toString("utf8");
 }
 
-async function handle(req: import("node:http").IncomingMessage, res: ServerResponse): Promise<void> {
+async function handle(req: import("node:http").IncomingMessage, res: ServerResponse, ctx: Ctx): Promise<void> {
   const url = new URL(req.url ?? "/", "http://internal");
   const { token, setCookie } = sealToken(req.headers.cookie);
   if (setCookie) res.setHeader("Set-Cookie", setCookie);
+  ctx.who = markOf(token);
+  if (setCookie) log("visitor.new", { who: ctx.who });
 
   if (req.method === "GET" && url.pathname === "/") {
+    ctx.route = "GET /";
     const error = url.searchParams.get("error");
     sweepAbandoned();
     const drafts = listDrafts().map((d) => ({ colophon: d, strokes: strokesFor(d.id) }));
@@ -135,16 +177,19 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
   }
 
   if (req.method === "GET" && url.pathname === "/events") {
+    ctx.route = "GET /events";
     const header = req.headers["last-event-id"];
     const since = (Array.isArray(header) ? header[0] : header) ?? url.searchParams.get("since") ?? undefined;
-    openStream(req, res, since, clientIp(req));
+    openStream(req, res, since, clientIp(req), ctx.who);
     return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/drafts") {
+    ctx.route = "POST /api/drafts";
     // A draft belongs to a seal the browser already holds; a request with no
     // seal cookie is a script, not a page someone loaded.
     if (setCookie) {
+      deny(ctx, "no-seal");
       json(res, 409, { error: "no-seal", message: "Reload the page, then brush." });
       return;
     }
@@ -155,11 +200,13 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
     }
     const ip = clientIp(req);
     if (draftCount() >= MAX_OPEN_DRAFTS || (draftsByIp.get(ip)?.size ?? 0) >= MAX_DRAFTS_PER_IP) {
+      deny(ctx, "busy");
       json(res, 503, { error: "busy", message: "Too many people are writing at once. Try again in a little while." });
       return;
     }
     const draft = createDraft(token);
     draftsByIp.set(ip, (draftsByIp.get(ip) ?? new Set()).add(draft.id));
+    log("draft.open", { who: ctx.who, id: draft.id });
     publish({ type: "draft", data: { id: draft.id, glyph: sealGlyph(token) } });
     json(res, 201, { id: draft.id, strokes: 0 });
     return;
@@ -167,31 +214,39 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
 
   const api = /^\/api\/colophons\/(\d{1,12})\/(strokes|seal|abandon)$/.exec(url.pathname);
   if (req.method === "POST" && api) {
+    ctx.route = "POST /api/colophons/:id/:action";
     const id = Number(api[1]);
     const action = api[2];
     const payload = await readJson(req);
     if (payload === "large") {
+      deny(ctx, "large");
       json(res, 413, { error: "large", message: "payload too large" });
       return;
     }
     if (payload === undefined) {
+      deny(ctx, "malformed");
       json(res, 400, { error: "malformed", message: "expected a JSON object" });
       return;
     }
     const colophon = getColophon(id);
     if (!colophon) {
+      deny(ctx, "missing");
       json(res, 404, { error: "missing", message: "no such colophon" });
       return;
     }
+    const owner = markOf(colophon.token);
     if (colophon.token !== token) {
+      deny(ctx, "not-yours", { owner, id });
       json(res, 403, { error: "not-yours", message: "only the writer can add to or seal a colophon" });
       return;
     }
     if (colophon.state === "sealed") {
+      deny(ctx, "sealed", { owner, id });
       json(res, 409, { error: "sealed", message: "this colophon is sealed; nothing more can be added" });
       return;
     }
     if (colophon.state === "abandoned") {
+      deny(ctx, "abandoned", { owner, id });
       json(res, 410, { error: "abandoned", message: "this draft was left too long and has been set aside" });
       return;
     }
@@ -199,14 +254,17 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
     if (action === "strokes") {
       const stroke = parseStroke(payload);
       if (typeof stroke === "string") {
+        deny(ctx, "malformed", { id });
         json(res, 400, { error: "malformed", message: stroke });
         return;
       }
       if (strokeCount(id) >= MAX_STROKES) {
+        deny(ctx, "full", { owner, id });
         json(res, 422, { error: "full", message: `a colophon holds at most ${MAX_STROKES} strokes` });
         return;
       }
       const saved = addStroke(id, STROKE_VERSION, stroke.points);
+      noteStroke(id, ctx.who);
       publish({
         type: "stroke",
         data: { colophonId: id, strokeId: saved.id, t: saved.t, points: saved.points, ...(stroke.nonce ? { c: stroke.nonce } : {}) },
@@ -218,18 +276,23 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
     if (action === "seal") {
       const body = typeof payload.body === "string" ? payload.body.trim() : "";
       if (body.length > MAX_BODY_LENGTH) {
+        deny(ctx, "long", { id });
         json(res, 400, { error: "long", message: `Keep the line to ${MAX_BODY_LENGTH} characters.` });
         return;
       }
       if (body.length === 0 && strokeCount(id) === 0) {
+        deny(ctx, "empty", { id });
         json(res, 400, { error: "empty", message: "Brush something, or write a line, before sealing." });
         return;
       }
       if (!sealDraft(id, token, body)) {
+        deny(ctx, "sealed", { owner, id });
         json(res, 409, { error: "sealed", message: "this colophon is already sealed" });
         return;
       }
       forgetDraft(id);
+      flushStrokes(id);
+      log("colophon.seal", { who: ctx.who, id, kind: body.length > 0 && strokeCount(id) === 0 ? "typed" : "brushed" });
       publish({ type: "sealed", data: { id } });
       json(res, 200, { id });
       return;
@@ -237,6 +300,8 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
 
     if (abandonDraft(id, token)) {
       forgetDraft(id);
+      flushStrokes(id);
+      log("draft.abandon", { who: ctx.who, id, by: "writer" });
       publish({ type: "abandoned", data: { id } });
     }
     json(res, 200, { id });
@@ -245,8 +310,10 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
 
   const fragment = /^\/colophons\/(\d{1,12})\/fragment$/.exec(url.pathname);
   if (req.method === "GET" && fragment) {
+    ctx.route = "GET /colophons/:id/fragment";
     const colophon = getColophon(Number(fragment[1]));
     if (!colophon || colophon.state !== "sealed") {
+      deny(ctx, "missing");
       json(res, 404, { error: "missing", message: "no such sealed colophon" });
       return;
     }
@@ -260,8 +327,10 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
   }
 
   if (req.method === "POST" && url.pathname === "/colophons") {
+    ctx.route = "POST /colophons";
     const raw = await readBody(req);
     if (raw === undefined) {
+      deny(ctx, "large");
       res.writeHead(413, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("payload too large");
       return;
@@ -273,7 +342,14 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
     if (body.length === 0) error = "empty";
     else if (body.length > MAX_BODY_LENGTH) error = "long";
 
-    if (!error) publish({ type: "sealed", data: { id: addColophon(token, body) } });
+    if (error) {
+      deny(ctx, error);
+    } else {
+      const id = addColophon(token, body);
+      log("colophon.typed", { who: ctx.who, id });
+      log("colophon.seal", { who: ctx.who, id, kind: "typed" });
+      publish({ type: "sealed", data: { id } });
+    }
 
     res.writeHead(303, { Location: error ? `/?error=${error}` : "/" });
     res.end();
@@ -281,12 +357,14 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
   }
 
   if (req.method === "GET" && url.pathname === "/readme/") {
+    ctx.route = "GET /readme/";
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(renderReadme(renderMarkdown(README)));
     return;
   }
 
   if (req.method === "GET" && url.pathname.startsWith("/public/")) {
+    ctx.route = "GET /public/*";
     const ext = extname(url.pathname);
     const type = MIME[ext];
     if (!type) {
@@ -313,9 +391,25 @@ async function handle(req: import("node:http").IncomingMessage, res: ServerRespo
 // A client that drops mid-body makes readBody throw "aborted"; uncaught, that
 // rejection would end the process for every visitor (spec/aborted-request).
 // Nobody is left to answer, so close what's left of the exchange.
+//
+// One `request` line per HTML/API request when the response ends. Skipped:
+// static assets (/public/*, noise with no actor) and /events (a long-lived
+// stream, logged as stream.open / stream.close instead, never per heartbeat).
 const server = createServer((req, res) => {
-  handle(req, res).catch((err: unknown) => {
-    if (!(err instanceof Error && err.message === "aborted")) console.error(err);
+  const ctx: Ctx = { route: "unmatched", who: "-" };
+  const started = performance.now();
+  res.on("close", () => {
+    if (ctx.route === "GET /public/*" || ctx.route === "GET /events") return;
+    log("request", {
+      who: ctx.who,
+      method: req.method ?? "-",
+      route: ctx.route,
+      status: res.statusCode,
+      ms: Math.round(performance.now() - started),
+    });
+  });
+  handle(req, res, ctx).catch((err: unknown) => {
+    if (!(err instanceof Error && err.message === "aborted")) logError(err, { who: ctx.who, route: ctx.route });
     if (!res.headersSent && !res.destroyed) {
       res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("something went wrong");
@@ -326,5 +420,5 @@ const server = createServer((req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`colophon listening on 0.0.0.0:${PORT}`);
+  log("server.start", { msg: `colophon listening on 0.0.0.0:${PORT}` });
 });
