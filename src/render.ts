@@ -181,6 +181,16 @@ export function renderIndex({ sealed, drafts, ownToken, eventId, error }: IndexV
         </form>
       </section>
 
+      <section aria-labelledby="match-heading">
+        <h2 id="match-heading">山海, a second scroll</h2>
+        <p class="section-note">
+          Past the colophons a second scroll unrolls: Mountains and Seas, a contest for two
+          played on a strip of land read right to left, against a friend or the computer. A
+          match's chronicle can be sealed here like any colophon. It needs JavaScript.
+          <a href="/match">Unroll the second scroll.</a>
+        </p>
+      </section>
+
       <section aria-labelledby="colophons-heading">
         <h2 id="colophons-heading">Colophons</h2>
         <p class="section-note">
