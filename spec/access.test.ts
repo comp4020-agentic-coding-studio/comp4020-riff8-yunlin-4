@@ -83,7 +83,7 @@ beforeAll(async () => {
 });
 afterAll(() => s.stop());
 
-const PUBLIC_KEYS = ["status", "matchId", "mapId", "seatsOpen", "you", "manualTicks", "view", "result"];
+const PUBLIC_KEYS = ["status", "matchId", "mapId", "seed", "seatsOpen", "you", "manualTicks", "view", "result"];
 const noLeak = (text: string): void => {
   for (const r of ["owner", "otherSeat", "third"] as const) expect(text).not.toContain((who[r] as Visitor).token);
 };

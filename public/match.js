@@ -524,7 +524,16 @@ function selectedPieces() {
   return ownPieces((e) => selected.has(e.id));
 }
 
+let hallHp = null; // [matchId, hp] of the last hall hp seen
+let attackedAt = -1e9;
+
 function renderHud() {
+  const hall = ownPieces((e) => e.kind === "hall")[0];
+  if (hall) {
+    if (hallHp && hallHp[0] === status.matchId && hall.hp < hallHp[1]) attackedAt = view.tick;
+    hallHp = [status.matchId, hall.hp];
+  }
+  const idle = ownPieces((e) => e.kind === "labourer" && e.task === "idle");
   const counts = {};
   for (const e of selectedPieces()) counts[e.kind] = (counts[e.kind] ?? 0) + 1;
   const sel = Object.entries(counts)
@@ -538,6 +547,20 @@ function renderHud() {
     el("span", { className: "match-hud-item" }, `you hold the ${SEAT_NAME[view.seat]} seat (${SIDE_GLYPH[view.seat]})`),
     el("span", { className: "match-hud-item" }, sel ? `${sel} selected` : "nothing selected"),
   );
+  if (idle.length) {
+    hud.append(
+      el("span", { className: "match-hud-item" }, `${idle.length} 勞 idle `),
+      button("Select idle labourers", () => {
+        selected = new Set(idle.map((e) => e.id));
+        renderHud();
+        renderControls();
+        draw();
+      }, "quiet"),
+    );
+  }
+  if (hall && view.tick - attackedAt <= 40) {
+    hud.append(el("span", { className: "match-hud-item", role: "status" }, `Your hall is under attack — ${hall.hp} of ${hall.maxHp}`));
+  }
 }
 
 function setMode(next) {
@@ -737,24 +760,23 @@ function describe(ev) {
   const me = view?.seat ?? status?.you;
   const name = (k) => NAMES[k] ?? k;
   switch (ev.type) {
-    case "unit.died":
-      if (ev.side === "wild") return `The ${name(ev.kind)} was brought down`;
-      if (ev.side === me) {
-        return ev.cause === "creature"
-          ? `Your ${name(ev.kind)} was taken by the ${name(ev.byKind)}`
-          : `Your ${name(ev.kind)} fell to an enemy ${name(ev.byKind)}`;
-      }
-      return ev.cause === "creature" ? `An enemy ${name(ev.kind)} was taken by the ${name(ev.byKind)}` : `Enemy ${name(ev.kind)} fell`;
+    case "unit.died": {
+      const where = `at (${ev.x},${ev.y})`;
+      if (ev.side === "wild") return `The ${name(ev.kind)} was killed by ${ev.bySide === me ? "your" : "enemy"} ${ev.byKind}s ${where}`;
+      const mine = ev.side === me;
+      if (ev.cause === "creature") return `${mine ? "Your" : "Enemy"} ${ev.kind} ${ev.unit} was killed by the ${name(ev.byKind)} ${where}`;
+      return mine ? `Your ${ev.kind} ${ev.unit} fell to enemy ${ev.byKind}s ${where}` : `Enemy ${ev.kind} ${ev.unit} was killed by your ${ev.byKind}s ${where}`;
+    }
     case "build.start":
       return ev.seat === me ? `${cap(name(ev.kind))} begun` : `The enemy has begun a ${name(ev.kind)}`;
     case "build.done":
       return ev.seat === me ? `${cap(name(ev.kind))} finished` : `The enemy finished a ${name(ev.kind)}`;
     case "unit.trained":
-      return ev.seat === me ? `A ${name(ev.kind)} is ready` : `The enemy trained a ${name(ev.kind)}`;
+      return ev.seat === me ? `New ${name(ev.kind)} ${ev.unit}` : `The enemy trained a ${name(ev.kind)}`;
     case "creature.aggro":
-      return ev.targetSeat === me ? `The ${name(ev.kind)} has turned on your people` : `The ${name(ev.kind)} has turned on the enemy`;
+      return ev.targetSeat === me ? `The ${name(ev.kind)} turned on your unit ${ev.target}` : `The ${name(ev.kind)} has turned on the enemy`;
     case "relic.claimed":
-      return ev.seat === me ? `You claimed the relic: ${ev.grain} grain` : `The relic has been claimed`;
+      return ev.seat === me ? `Relic claimed: +${ev.grain} grain` : `The relic has been claimed`;
     case "match.end":
       return ev.winner === me ? `The enemy hall has fallen` : `Your hall has fallen`;
     default:

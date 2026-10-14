@@ -85,7 +85,7 @@ interface Live {
 let live: Live | null = null;
 // The final state of the most recent match this process ran, for its players' last view.
 let finished: { id: number; state: SimState | null; recent: [SimEvent[], SimEvent[]] } | null = null;
-const RECENT = 30;
+const RECENT = 200;
 let tickTimer: NodeJS.Timeout | undefined;
 let idleTimer: NodeJS.Timeout | undefined;
 let waitTimer: NodeJS.Timeout | undefined;
@@ -134,6 +134,7 @@ export interface StatusObject {
   status: "none" | "waiting" | "playing" | "ended";
   matchId: number | null;
   mapId: string | null;
+  seed?: number;
   seatsOpen: number[];
   you: Seat | null;
   manualTicks: boolean;
@@ -158,6 +159,7 @@ export function statusFor(token: string | null, withView = true): StatusObject {
       status: live.status,
       matchId: live.id,
       mapId: live.mapId,
+      seed: live.seed,
       seatsOpen: live.status === "waiting" ? [1] : [],
       you,
       view: withView && you !== null && live.state ? viewFor(live.state, you) : null,
@@ -173,6 +175,7 @@ export function statusFor(token: string | null, withView = true): StatusObject {
     status: "ended",
     matchId: row.id,
     mapId: row.map_id,
+    seed: row.seed,
     seatsOpen: [],
     you,
     view,

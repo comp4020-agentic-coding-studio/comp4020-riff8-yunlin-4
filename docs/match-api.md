@@ -28,7 +28,7 @@ cookie. Refusals are `{ "error": <code>, "message": <plain words> }`.
 
 `view` (see `src/sim/types.ts` `SeatView`) is present only for a seated
 visitor while `status` is `playing` or `ended`. Alongside it, a seated visitor
-gets `recentEvents: SimEvent[]`: the last 30 events their seat may know,
+gets `recentEvents: SimEvent[]`: the last 200 events their seat may know,
 filtered exactly as the stream's `events` frames are (absent for anyone else). `result` is present for the
 most recent finished match only to the two players who sat in it (others see
 `status: "ended"` and nothing else, until a new match is created).

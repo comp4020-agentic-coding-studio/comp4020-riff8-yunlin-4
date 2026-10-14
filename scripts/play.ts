@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RULES_TEXT } from "../src/rules-text.ts";
 import type { Command, SeatView } from "../src/sim/types.ts";
-import { diffSnapshots, renderView, seatName, snapshot, type Snapshot } from "./lib/render-view.ts";
+import { describeEvent, diffSnapshots, ownBuildingHp, renderView, seatName, snapshot, type Snapshot } from "./lib/render-view.ts";
 
 const argv = process.argv.slice(2);
 function flag(name: string): string | undefined {
@@ -23,7 +23,7 @@ const [sub = "look", ...args] = argv;
 const port = new URL(server).port || "80";
 const stateFile = join(process.env.TMPDIR ?? "/tmp", `shanhai-play-${as}-${port}.json`);
 
-interface Saved { cookie?: string; snap?: Snapshot; matchId?: number | null }
+interface Saved { cookie?: string; snap?: Snapshot; matchId?: number | null; lastTick?: number; bhp?: Record<number, { kind: string; hp: number; maxHp: number }> }
 let saved: Saved = {};
 try { saved = JSON.parse(readFileSync(stateFile, "utf8")); } catch { /* first call */ }
 const save = () => writeFileSync(stateFile, JSON.stringify(saved));
@@ -61,7 +61,7 @@ function say(s: any): string[] {
   const out: string[] = [];
   const seats = s.you === null ? "you hold no seat" : `you are ${seatName(s.you)} (seat ${s.you})`;
   const open = (s.seatsOpen ?? []).length ? `; seat ${s.seatsOpen.join(",")} open (type: join, or: bot)` : "";
-  out.push(`match: ${s.status}${s.matchId ? ` #${s.matchId} on ${s.mapId}` : ""} · ${seats}${open}${s.manualTicks ? " · manual ticks (use: step N)" : ""}`);
+  out.push(`match: ${s.status}${s.matchId ? ` #${s.matchId} on ${s.mapId}${s.seed !== undefined ? ` · seed ${s.seed}` : ""}` : ""} · ${seats}${open}${s.manualTicks ? " · manual ticks (use: step N)" : ""}`);
   if (s.result) {
     const r = s.result;
     out.push(`result: ${r.winner === null ? "no winner" : `${seatName(r.winner)} won`} by ${r.reason} after ${r.ticks} ticks · you ${r.youWon ? "won" : "did not win"}`);
@@ -79,11 +79,28 @@ async function look(s?: any, quiet = false): Promise<void> {
   const v: SeatView | null = s.view;
   if (!v) { console.log(say(s).join("\n")); return; }
   const out = renderView(v, { around: around === undefined ? undefined : Number(around) });
+  const idle = v.entities.filter((e) => e.side === v.seat && e.kind === "labourer" && e.task === "idle").length;
+  out[0] += `${idle > 0 ? ` · ${idle} idle labourer${idle === 1 ? "" : "s"}` : ""} · match ${s.matchId} · ${s.mapId} · seed ${s.seed}`;
   const now = snapshot(v);
+  const same = saved.matchId === s.matchId;
+  const prev = same ? saved.snap : undefined;
+  const bhp = ownBuildingHp(v);
+  const warn: string[] = [];
+  for (const [id, b] of Object.entries(bhp)) {
+    const was = same ? saved.bhp?.[Number(id)] : undefined;
+    if (was && b.hp < was.hp) warn.push(`YOUR ${b.kind.toUpperCase()} ${id} IS UNDER ATTACK: ${b.hp}/${b.maxHp} (−${was.hp - b.hp})`);
+  }
+  out.push(...warn);
   out.push("events since your last look:");
-  const prev = saved.matchId === s.matchId ? saved.snap : undefined;
+  const lastTick = same ? (saved.lastTick ?? -1) : -1;
+  const evs: any[] = (s.recentEvents ?? []).filter((e: any) => e.tick > lastTick);
+  const lines = evs.map((e) => describeEvent(e, v.seat)).filter((x): x is string => x !== null);
   const d = prev ? diffSnapshots(prev, now) : [];
-  out.push(...(d.length ? d.map((x) => `  ${x}`) : [prev ? "  nothing new" : "  (first look)"]));
+  const all = [...lines, ...d];
+  out.push(...(all.length ? all.map((x) => `  ${x}`) : [prev ? "  nothing new" : "  (first look)"]));
+  const maxTick = Math.max(lastTick, ...evs.map((e) => e.tick));
+  saved.lastTick = maxTick;
+  saved.bhp = bhp;
   if (s.status === "ended") out.push(...say(s));
   saved.snap = now; saved.matchId = s.matchId; save();
   if (!quiet) console.log(out.join("\n"));
@@ -96,10 +113,13 @@ function resolveIds(token: string, v: SeatView | null): number[] {
   if (token === "all-labourers") ids = pick((e) => e.kind === "labourer");
   else if (token === "all-spearmen") ids = pick((e) => e.kind === "spearman");
   else if (token === "idle-labourers") ids = pick((e) => e.kind === "labourer" && e.task === "idle");
+  else if (token === "all-units") ids = pick((e) => e.kind === "labourer" || e.kind === "spearman");
   else ids = token.split(",").map((x) => Number(x));
-  if (ids.length === 0 || ids.some((n) => !Number.isInteger(n))) die(`no units for "${token}" (give ids like 4,5,6, or all-labourers / all-spearmen / idle-labourers)`);
+  if (ids.length === 0 || ids.some((n) => !Number.isInteger(n))) die(`no units for "${token}"; selectors: ${SELECTORS}`);
   return ids;
 }
+
+const SELECTORS = "4,5,6 | all-labourers | all-spearmen | idle-labourers | all-units";
 
 const num = (s: string | undefined, what: string): number => {
   const n = Number(s);
@@ -171,7 +191,7 @@ const HELP = `play.ts commands (node scripts/play.ts [--server URL] [--as NAME] 
   step N                             (manual-tick servers) advance N ticks, then look
   move <ids> <x> <y>                 gather <ids> <x> <y>        build <ids> barracks <x> <y>
   attack <ids> <targetId>            train <buildingId> labourer|spearman        stop <ids>
-  <ids>: 4,5,6 or all-labourers | all-spearmen | idle-labourers
+  <ids>: 4,5,6 | all-labourers | all-spearmen | idle-labourers | all-units
   seal-chronicle                     seal an ended match's chronicle as your colophon
   --around X shows a 60-column window centred on column X. Orders print the tick they apply at.`;
 

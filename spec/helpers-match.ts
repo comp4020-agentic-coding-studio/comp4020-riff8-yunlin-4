@@ -24,9 +24,20 @@ process.on("exit", () => {
   for (const c of children) c.kill();
 });
 
+// The machine is shared with other servers, so a random port can be taken:
+// a bind failure retries on another, rather than failing the spec.
 export async function startServer(env: Record<string, string | undefined> = {}, dir?: string): Promise<MatchServer> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await startOn(8500 + Math.floor(Math.random() * 500), env, dir);
+    } catch (err) {
+      if (attempt >= 5 || !String(err).includes("EADDRINUSE")) throw err;
+    }
+  }
+}
+
+async function startOn(port: number, env: Record<string, string | undefined>, dir?: string): Promise<MatchServer> {
   const where = dir ?? mkdtempSync(join(tmpdir(), "match-"));
-  const port = 8500 + Math.floor(Math.random() * 500);
   const merged: Record<string, string | undefined> = {
     ...process.env,
     PORT: String(port),

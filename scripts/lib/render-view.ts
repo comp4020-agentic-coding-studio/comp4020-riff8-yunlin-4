@@ -2,7 +2,7 @@
 // scripts/replay.ts. Pure: no I/O.
 
 import { BUILDINGS } from "../../src/sim/balance.ts";
-import type { Kind, SeatView, VisibleEntity } from "../../src/sim/types.ts";
+import type { Kind, SeatView, SimEvent, VisibleEntity } from "../../src/sim/types.ts";
 
 const SEAT_NAMES = ["east", "west"];
 const IN_VIEW: Record<string, string> = { p: ".", r: "~", f: "=", g: "T", h: "^", l: '"', x: "X" };
@@ -112,6 +112,7 @@ export interface Snapshot {
   own: Record<number, string>; // id -> kind
   done: number[]; // own completed building ids
   seen: Record<number, string>; // visible non-own ids -> "enemy spearman" etc.
+  bhp?: Record<number, { kind: string; hp: number; maxHp: number }>;
 }
 
 export function snapshot(v: SeatView): Snapshot {
@@ -128,10 +129,44 @@ export function snapshot(v: SeatView): Snapshot {
 
 export function diffSnapshots(a: Snapshot, b: Snapshot): string[] {
   const out: string[] = [];
-  for (const [id, k] of Object.entries(b.own)) if (!(id in a.own)) out.push(`new ${k} ${id}`);
-  for (const [id, k] of Object.entries(a.own)) if (!(id in b.own)) out.push(`your ${k} ${id} is gone`);
   for (const [id, k] of Object.entries(b.seen)) if (!(id in a.seen)) out.push(`${k} ${id} came into view`);
-  for (const [id, k] of Object.entries(a.seen)) if (!(id in b.seen)) out.push(`${k} ${id} left view or died`);
+  for (const [id, k] of Object.entries(a.seen)) if (!(id in b.seen)) out.push(`${k} ${id} left view`);
   if (b.grain !== a.grain) out.push(`grain ${b.grain > a.grain ? "+" : ""}${b.grain - a.grain} (now ${b.grain})`);
   return out;
+}
+
+// ---- events in plain words (from status.recentEvents) ----
+
+const CREATURE_NAMES: Record<string, string> = { nian: "年 nian", jiaolong: "蛟龍 jiaolong", qilin: "麒麟 qilin", pixiu: "貔貅 pixiu" };
+const kindName = (k: string) => CREATURE_NAMES[k] ?? k;
+
+export function describeEvent(ev: SimEvent, me: number): string | null {
+  const t = `t${ev.tick}`;
+  switch (ev.type) {
+    case "unit.died": {
+      const where = `at (${ev.x},${ev.y})`;
+      if (ev.side === "wild") return `${t} the ${kindName(ev.kind)} was killed by ${ev.bySide === me ? "your" : "enemy"} ${ev.byKind}s ${where}`;
+      const mine = ev.side === me;
+      const owner = mine ? "your" : "enemy";
+      if (ev.cause === "creature") return `${t} ${owner} ${ev.kind} ${ev.unit} was killed by the ${kindName(ev.byKind)} ${where}`;
+      return mine
+        ? `${t} your ${ev.kind} ${ev.unit} fell to enemy ${ev.byKind}s ${where}`
+        : `${t} enemy ${ev.kind} ${ev.unit} was killed by your ${ev.byKind}s ${where}`;
+    }
+    case "creature.aggro":
+      return `${t} the ${kindName(ev.kind)} turned on ${ev.targetSeat === me ? "your" : "an enemy"} ${ev.target === undefined ? "unit" : `unit ${ev.target}`}`;
+    case "build.start": return ev.seat === me ? `${t} ${ev.kind} ${ev.building} begun at (${ev.x},${ev.y})` : null;
+    case "build.done": return ev.seat === me ? `${t} ${ev.kind} ${ev.building} finished` : `${t} the enemy finished a ${ev.kind}`;
+    case "unit.trained": return ev.seat === me ? `${t} new ${ev.kind} ${ev.unit}` : null;
+    case "relic.claimed": return ev.seat === me ? `${t} relic claimed: +${ev.grain} grain` : `${t} the enemy claimed the relic`;
+    case "match.end": return `${t} ${ev.winner === me ? "the enemy hall fell: you won" : "your hall fell"}`;
+    default: return null;
+  }
+}
+
+// Hp of own hall/barracks, for under-attack warnings.
+export function ownBuildingHp(v: SeatView): Record<number, { kind: string; hp: number; maxHp: number }> {
+  const o: Record<number, { kind: string; hp: number; maxHp: number }> = {};
+  for (const e of v.entities) if (e.side === v.seat && (e.kind === "hall" || e.kind === "barracks")) o[e.id] = { kind: e.kind, hp: e.hp, maxHp: e.maxHp };
+  return o;
 }
