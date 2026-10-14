@@ -34,6 +34,8 @@ alone; this file does its job.
 - [x] Triage round 1, fix blockers/majors (21:10)
 - [x] Link the game from the scroll page (21:11)
 - [x] Round 2: all six personas plus a log-only reader and a blind code audit; 4 blockers, 13 majors (21:48)
+- [x] T-21 (F-34, F-35, major) raids between looks warn; regrove reach 24 (21:59)
+- [ ] T-22 (F-36, F-38, major) idle spearmen defend their people nearby; plurals — done when: sim-combat spec
 - [x] T-20 (F-32, major) an unjoined match lapses after three minutes — done when: spec with short env
 
 ### M3 — hold up (2:30–3:30)

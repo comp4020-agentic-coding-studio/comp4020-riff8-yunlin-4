@@ -21,7 +21,7 @@ matter or can't be understood), `minor`, `idea`.
 Results: rusher lost at 6:08, explorer lost at 5:49, economist lost at 22:23.
 All three would play again. Nobody claimed the relic; only the pixiu was met.
 
-### F-1 [fixed] major · round 1 · rusher, explorer, economist · balance
+### F-1 [verified] major · round 1 · rusher, explorer, economist · balance
 What: two of three matches were over inside six and a half minutes, and the
 bot's first wave of five or six spearmen arrived at about 4:30 every time.
 Expected: 8 to 15 minutes between the bot and a competent player (brief).
@@ -30,7 +30,7 @@ Triage: accepted → T-1. Slow the early military curve (barracks build, spearma
 training, hall hp) in balance.ts and move the bot's thresholds into balance.ts,
 then re-check with the soak. Not tuned to one tester: all three saw the wave.
 
-### F-2 [fixed] major · round 1 · economist · combat
+### F-2 [verified] major · round 1 · economist · combat
 What: 26 labourers ordered to attack killed five spearmen at the hall for the
 loss of one; spearmen beating on a building didn't answer back.
 Expected: spearmen to be the answer to spearmen.
@@ -38,7 +38,7 @@ Repro: scroll-1, seed 1; `attack all-labourers 54` at tick 1191, 1221, 1236, 125
 Triage: accepted → T-2. A unit struck while attacking a building turns on its
 attacker; labourer damage down.
 
-### F-3 [fixed] major · round 1 · economist, explorer, rusher · legibility
+### F-3 [verified] major · round 1 · economist, explorer, rusher · legibility
 What: deaths read "labourer 4 is gone" / "left view or died", with no cause;
 the hall lost hp with no warning; the economist didn't know how they lost.
 Expected: to know what killed what, and that the hall is under attack.
@@ -104,7 +104,7 @@ Results so far: economist won at 9:55, rusher lost at 8:14, explorer lost at
 9:10 and was losing at 6:43. Round 1's F-1 (too short) reads fixed: all three
 matches ran 8–10 minutes. The explorer claimed the relic first try (F-4).
 
-### F-13 [fixed] blocker · round 2 · rusher · building
+### F-13 [verified] blocker · round 2 · rusher · building
 What: a barracks left at 93% when its labourers were sent to gather could
 never be finished; `build` on the spot was refused ("a building is in the
 way") and `train` "still being built". 200 grain lost.
@@ -235,3 +235,44 @@ manual ticks). Triage: rejected for the deployed game, where game time and the
 wall clock are the same 4 ticks a second; under manual ticks wall-clock idle is
 the right rule, since the tester is the clock. ADR 0003 says "five minutes" of
 real time. Rules text says "five minutes", consistent.
+
+## Round 3 (21:51–): fresh verifiers, each told which earlier findings to re-check, plus a fresh newcomer and UX reviewer
+
+Results so far: balanced player lost at 8:37, explorer lost at 10:46.
+
+Verified (fresh tester, not the reporter):
+- F-13 [verified]: a half-built barracks resumed from 9% and finished (v1).
+- F-3 [verified]: deaths name the killer, kind and place; hall damage in numbers (v1, v2).
+- F-2 [verified]: labourers lose to spearmen at roughly ten to one in cost (v1).
+- F-19 [verified in part]: attack warnings and sightings appear; a raid that
+  starts and ends between two looks didn't warn (F-34).
+- F-1 [verified]: matches ran 8:37 and 10:46.
+
+### F-34 [fixed] major · round 3 · v1, v2 · warning
+Ten to fifteen labourers killed at an out-of-view grove between two looks:
+deaths listed, but no attack warning or sighting first.
+Triage: accepted → T-21; enemy-caused deaths now raise both.
+
+### F-35 [fixed] major · round 3 · v1 · economy
+21 labourers idled at the hall although groves 19–21 tiles away had been seen.
+Triage: accepted → T-21; REGROVE_FAR_RADIUS 12 → 24, spec added.
+
+### F-36 [open] major · round 3 · v1, v2 (and round 2 economist, explorer) · combat
+Idle spearmen eleven tiles away ignore a raid killing their own labourers.
+Four independent reports across two rounds.
+Triage: accepted → T-22 (idle spearmen go to the help of their own people
+attacked by enemy soldiers within twelve tiles; never for creatures).
+
+### F-37 [open] minor · round 3 · v2 · pixiu
+The heading is "unknown" at a first sighting, which is when it matters.
+Triage: deferred: a heading needs two sightings unless the server sends the
+pixiu's next waypoint, which is information a player can only infer by
+watching it; the rules text now traces its loop (F-20), which is the plan-
+ahead information. For a human to review.
+
+### F-38 [open] minor · round 3 · v1, v2 · wording
+"spearmans". Triage: accepted → T-22.
+
+### F-39 idea · round 3 · v1 · economy
+New labourers stand idle at the hall. Deferred: a rally point is a second
+control to learn; "Select idle labourers" covers it.
