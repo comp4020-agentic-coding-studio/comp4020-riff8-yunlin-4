@@ -20,16 +20,16 @@ alone; this file does its job.
 - [x] `docs/feedback.md` created (20:08)
 
 ### M1 — headless match (0:25–1:30)
-- [ ] Sim core, map, creatures, fog, pathing, balance — done when: `spec/sim-*` green
+- [x] Sim core, map, creatures, fog, pathing, balance; `spec/sim-*` green (20:46)
 - [x] `src/mark.ts`, `src/log.ts`, request/domain/refusal logging; `spec/mark`, `spec/log*` green (20:09)
-- [ ] Bot (same fogged view and commands) + bot-vs-bot soak — done when: soak spec green, matches end
-- [ ] Match lifecycle (`src/match.ts`), tables, routes, manual-tick mode refused under FLY_APP_NAME — done when: match server specs green
-- [ ] `scripts/play.ts`, `scripts/replay.ts` — done when: a tester can play a match from the shell
-- [ ] Round 1 playtest (economist, rusher, mythic explorer)
+- [x] Bot + bot-vs-bot soak green, matches end in 6.5–8.3 min (20:46)
+- [x] Match lifecycle, tables, routes, manual-tick refused under FLY_APP_NAME; match specs green (20:46)
+- [x] `scripts/play.ts`, `scripts/replay.ts`; three testers played full matches (20:54)
+- [x] Round 1 playtest: 6 major, 4 minor, 2 ideas (20:54)
 
 ### M2 — on the scroll (1:30–2:30)
 - [ ] Per-seat stream, `/match` page + `public/match.js`, seat/join, results, chronicle seal
-- [ ] `spec/access.test.ts` (table-driven against ADR 0002)
+- [x] `spec/access.test.ts`, 210 cases, no table/code disagreement (20:55)
 - [x] Log file + rotation on `/data/logs` (20:09, with the logging slice)
 - [ ] Triage round 1, fix blockers/majors
 - [ ] Link the game from the scroll page
@@ -47,3 +47,15 @@ alone; this file does its job.
 - [ ] prompt.md deleted in the last commit
 
 ## Found along the way
+
+From round 1 (`docs/feedback.md`):
+
+- [ ] T-1 (F-1, major) slower early military, bot thresholds in balance.ts — done when: soak matches end in 8–15 min, a fresh tester's first wave arrives later
+- [ ] T-2 (F-2, major) units hit while attacking a building turn on the attacker; labourers weaker — done when: sim spec of a labourer mob vs spearmen
+- [ ] T-3 (F-3, major) deaths and hall damage told in words in play.ts and the page — done when: play.ts prints "killed by" lines; page shows them
+- [ ] T-4 (F-4, major) relic claimable and readable — done when: sim spec claims it with the pixiu away
+- [ ] T-5 (F-5, major) labourers move on to the next seen grove; idle shown — done when: sim spec, both clients show idle count
+- [ ] T-6 (F-6, major) rules say where each creature lives — done when: rules text names places
+- [ ] T-7 (F-7, minor) build refusal says why — done when: validate spec
+- [ ] T-8 (F-8, minor) attackers move on to the next visible enemy — done when: sim spec
+- [ ] T-9 (F-9, F-10, minor) status shows match id and seed; selectors listed — done when: play.ts status shows seed
