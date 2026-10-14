@@ -1,4 +1,5 @@
 import { escapeHtml } from "./html.ts";
+import { BUILDINGS, UNITS } from "./sim/index.ts";
 
 // The page for GET /match: a shell the script fills. The game needs
 // JavaScript (README.md, "山海, the second scroll"); the scroll itself never
@@ -43,7 +44,8 @@ export function renderMatchPage({ rulesText, ownMark, ownGlyph }: MatchPageOptio
         <p class="match-note" role="status" aria-live="polite" data-match-message></p>
       </section>
 
-      <section class="match-board" data-match-board hidden aria-label="The board">
+      <section class="match-board" data-match-board hidden aria-label="The board"
+               data-cost-barracks="${BUILDINGS.barracks.cost}" data-cost-labourer="${UNITS.labourer.cost}" data-cost-spearman="${UNITS.spearman.cost}">
         <p class="match-first" data-match-first hidden>Select your labourers (click, or drag a box), press Gather, then click a grove. Right-click is a shortcut for orders.</p>
         <div class="match-hud" data-match-hud></div>
         <div class="match-controls" data-match-controls></div>
@@ -53,7 +55,7 @@ export function renderMatchPage({ rulesText, ownMark, ownGlyph }: MatchPageOptio
                   aria-label="An ink map of the land between the two halls: river, groves, hills and the pieces in view.">
           </canvas>
         </div>
-        <p class="match-legend">勞 labourer · 兵 spearman · 廳 hall · 營 barracks · solid = yours · hollow or hatched = theirs · jagged ring = creature · small pale trees = grove (number = grain left)</p>
+        <p class="match-legend">勞 labourer · 兵 spearman · 廳 hall · 營 barracks · solid = yours · hollow or hatched = theirs · jagged ring = creature · arched strokes = hills (impassable) · wavy lines = river (fords are dashed) · small pale trees = grove (number = grain left)</p>
         <ol class="match-log" aria-live="polite" aria-label="What just happened" data-match-log></ol>
       </section>
 

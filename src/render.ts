@@ -133,6 +133,7 @@ export function renderIndex({ sealed, drafts, ownToken, eventId, error }: IndexV
       <h1>Colophon</h1>
       <p class="kicker">a shared margin on one painting</p>
       <p><a href="/readme/">what good means here</a></p>
+      <p><a href="/match">Or play 山海, a contest on a second scroll →</a></p>
     </header>
     <main>
       <figure class="scroll-frame">

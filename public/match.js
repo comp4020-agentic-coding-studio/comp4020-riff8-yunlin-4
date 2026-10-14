@@ -61,8 +61,9 @@ const sticky = el("div", { className: "match-sticky" });
 const attackEl = el("p", { className: "match-alert", role: "alert", hidden: "" });
 const sightEl = el("p", { className: "match-alert match-alert--sight", role: "status", hidden: "" });
 hud.before(sticky);
-sticky.append(attackEl, sightEl, hud, controls);
+sticky.append(attackEl, sightEl, hud, controls, firstEl);
 
+let lastMatch = null;
 let status = null; // the status object, without view
 let view = null; // the latest SeatView
 let selected = new Set();
@@ -78,6 +79,28 @@ const AREA = 10; // tiles: one warning per 10x10 area
 const areaKey = (x, y) => `${Math.floor(x / AREA)},${Math.floor(y / AREA)}`;
 const alerts = { attack: new Map(), sight: new Map() }; // area -> { text, tick }
 const heading = new Map(); // creature id -> { x, y, dx, dy }
+const seenKinds = new Set(); // creature kinds already announced this match
+// Short forms of the creature rules; src/rules-text.ts is the source.
+const CREATURE_RULES = {
+  nian: "it sleeps in its den in the richest grove and attacks anything that comes close",
+  jiaolong: "it lurks in the river, unseen, and strikes units on or beside the water",
+  qilin: "it is peaceful unless a spearman enters its glade; labourers beside it gather twice as fast",
+  pixiu: "it patrols the fords and attacks what it meets",
+};
+// Costs come from src/sim/balance.ts, via data attributes on the board.
+const cost = (k) => board.dataset[`cost${k}`];
+
+// Where, in words, relative to this seat's hall (y < 16 is the north half).
+function where(x, y) {
+  const hall = view.entities.find((e) => e.side === view.seat && e.kind === "hall");
+  const mid = view.width / 2;
+  const ns = y < 16 ? "north" : "south";
+  let place = "on the far side";
+  if (hall && Math.abs(x - hall.x) <= 14) place = "near your hall";
+  else if (Math.abs(x - mid) <= 8) place = "in the middle by the river";
+  else if (hall && Math.abs(x - hall.x) < Math.abs(x - (view.width - 1 - hall.x))) place = "between your hall and the river";
+  return `${place}, ${ns} half (${x},${y})`;
+}
 
 function say(message) {
   messageEl.textContent = message ?? "";
@@ -134,6 +157,8 @@ function applyStatus(next) {
     heading.clear();
   }
   status = { ...next };
+  if (next.matchId !== lastMatch) seenKinds.clear();
+  lastMatch = next.matchId;
   if ("view" in next) {
     view = next.view;
     delete status.view;
@@ -249,7 +274,7 @@ function renderBoard() {
   const seated = status && (status.you === 0 || status.you === 1);
   const show = seated && view && (status.status === "playing" || status.status === "ended");
   board.hidden = !show;
-  firstEl.hidden = !(show && status.status === "playing" && !ordered);
+  firstEl.hidden = !(show && status.status === "playing");
   if (!show) return;
   if (!terrain || canvas.width !== Math.round(view.width * T * Math.min(2, devicePixelRatio || 1))) sizeCanvas();
   // Drop anything selected that has died or gone.
@@ -284,6 +309,10 @@ function watch() {
         hurt.set(areaKey(e.x, e.y), a);
       }
     } else if (e.side !== view.seat && e.side !== "wild" && e.kind === "spearman") now.soldiers.add(e.id);
+    if (CREATURES.has(e.kind) && !seenKinds.has(e.kind)) {
+      seenKinds.add(e.kind);
+      pushLog(`${clock(view.tick)} A ${NAMES[e.kind]} is in view: ${CREATURE_RULES[e.kind]}`);
+    }
     if (e.side === "wild") {
       const h = heading.get(e.id);
       if (!h) heading.set(e.id, { x: e.x, y: e.y, dx: 0, dy: 0 });
@@ -301,7 +330,7 @@ function watch() {
   }
   for (const [k, g] of fresh) {
     if (alerts.sight.has(k) && view.tick - alerts.sight.get(k).tick <= ALERT_TICKS) continue;
-    const text = `Enemy spearmen sighted near (${g.x},${g.y}) — ${g.n} of them`;
+    const text = `Enemy spearmen sighted ${where(g.x, g.y)} — ${g.n} of them`;
     alerts.sight.set(k, { text, tick: view.tick });
     pushLog(`${clock(view.tick)} ${text}`);
   }
@@ -311,7 +340,7 @@ function watch() {
 // One line per area: a fresh hit in an area already warned about within the
 // last few seconds only refreshes the alert, it isn't logged again.
 function attacked(key, kinds, x, y, killed = "") {
-  const text = `Your ${[...kinds].map((k) => plural(k)).join(" and ")} are under attack near (${x},${y})${killed}`;
+  const text = `Your ${[...kinds].map((k) => plural(k)).join(" and ")} are under attack ${where(x, y)}${killed}`;
   const old = alerts.attack.get(key);
   const tick = view?.tick ?? 0;
   alerts.attack.set(key, { text, tick });
@@ -756,11 +785,16 @@ function renderControls() {
   };
   if (units.length) controls.append(modeButton("order", "Order: move or attack"));
   if (labourers.length) {
-    controls.append(modeButton("gather", "Gather"), modeButton("build", "Build barracks"));
+    controls.append(modeButton("gather", "Gather"), modeButton("build", `Build barracks (${cost("Barracks")})`));
+  }
+  const spearmanButton = button(`Train spearman (${cost("Spearman")})`, () => train("barracks", "spearman"), "quiet");
+  if (!ownPieces((e) => e.kind === "barracks" && e.task !== "building").length) {
+    spearmanButton.disabled = true;
+    spearmanButton.title = "Spearmen train at a finished barracks; build one first";
   }
   controls.append(
-    button("Train labourer", () => train("hall", "labourer"), "quiet"),
-    button("Train spearman", () => train("barracks", "spearman"), "quiet"),
+    button(`Train labourer (${cost("Labourer")})`, () => train("hall", "labourer"), "quiet"),
+    spearmanButton,
   );
   if (units.length) controls.append(button("Stop", () => command({ type: "stop", units: ids(units) }), "quiet"));
   controls.append(
@@ -770,13 +804,17 @@ function renderControls() {
       "quiet match-forfeit",
     ),
   );
+  const first = "Select your labourers (click, or drag a box), press Gather, then click a grove. Right-click is a shortcut for orders.";
+  firstEl.textContent = first;
+  firstEl.classList.toggle("match-first--off", ordered || mode !== null);
   if (mode) {
     const hint = {
       order: "Now click where to go, or an enemy to attack",
       gather: "Now click a grove",
       build: "Now click open ground for the barracks",
     }[mode];
-    controls.append(el("span", { className: "match-hint", role: "status" }, `${hint} (Escape or the button again to cancel)`));
+    firstEl.textContent = `${hint} (Escape or the button again to cancel)`;
+    firstEl.classList.remove("match-first--off");
   }
 }
 
@@ -788,7 +826,7 @@ async function command(cmd) {
   const { ok, data } = await post("/api/match/command", cmd);
   if (ok) {
     ordered = true;
-    firstEl.hidden = true;
+    firstEl.classList.add("match-first--off");
   }
   say(ok ? "" : (data.message ?? "That order wasn't taken."));
 }
@@ -993,7 +1031,7 @@ function addEvents(events) {
     attacked(k, a.kinds, a.x, a.y, `: ${a.n} killed by ${[...a.by].join(" and ")}`);
     // an enemy-caused death is a sighting where it happened, if none was seen
     if (a.foe && !alerts.sight.has(k)) {
-      const text = `Enemy spearmen sighted near (${a.x},${a.y}) — they killed ${a.n} of yours`;
+      const text = `Enemy spearmen sighted ${where(a.x, a.y)} — they killed ${a.n} of yours`;
       alerts.sight.set(k, { text, tick: view.tick });
       pushLog(`${clock(view.tick)} ${text}`);
     }

@@ -477,14 +477,23 @@ footer {
   border: 2px double var(--ink);
 }
 
+/* A fixed-height line in the sticky band: its text changes, the map never moves. */
 .match-first {
-  margin: 0 0 0.5rem;
-  padding: 0.4rem 0.6rem;
+  box-sizing: border-box;
+  height: 3.4rem;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  overflow: hidden;
+  font-size: 0.9rem;
   border: 1px solid var(--ink-soft);
 }
 
 .match-first[hidden] {
   display: none;
+}
+
+.match-first--off {
+  visibility: hidden;
 }
 
 .match-legend {
