@@ -204,7 +204,7 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
       if (reason === "not-yours") {
         const route = str(e.route) ?? "";
         const what = route.includes("command") ? "a unit" : route.includes("chronicle") ? "a chronicle" : "something";
-        return `${who2} tried to ${route.includes("command") ? "command" : "touch"} ${what} that is not theirs${owner ? ` (it is ${owner}'s)` : ""}: refused`;
+        return `${who2} tried to ${route.includes("command") ? "command" : "touch"} ${what} that is not theirs${e.owner === "-" ? " (no such unit exists)" : e.owner === "wild" ? " (it is a creature)" : owner ? ` (it is ${owner}'s)` : ""}: refused`;
       }
       if (attempt !== undefined && reason === "grain") return `${who2} tried to ${attempt} but couldn't afford it: refused`;
       if (attempt !== undefined && reason === "pop-cap") return `${who2} tried to ${attempt} but was at the population cap: refused`;
@@ -303,7 +303,7 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
       return `match ${matchKey ?? "?"} ended${dur}: ${result}`;
     }
     case "chronicle.seal":
-      return `the chronicle of match ${matchKey ?? "?"} was sealed as colophon ${tidy(e.colophon)}`;
+      return `${who} sealed the chronicle of match ${matchKey ?? "?"} onto the scroll as their colophon ${tidy(e.colophon)}`;
     default: {
       const rest = Object.entries(e)
         .filter(([k, v]) => k !== "ts" && k !== "event" && k !== "who" && (typeof v === "string" || typeof v === "number" || typeof v === "boolean" || v === null))

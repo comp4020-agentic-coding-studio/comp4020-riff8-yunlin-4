@@ -40,7 +40,7 @@ it("shows game time, tags sides, and says what was tried", () => {
   expect(n({ event: "build.done", who: "守·57a0ee", match: 1, tick: 533, seat: 0, kind: "barracks" })).toBe(
     "14:02:19 [2:13] 守·57a0ee (east) finished building a barracks",
   );
-  expect(n({ event: "chronicle.seal", match: 1, colophon: 3 })).toBe("14:02:19 the chronicle of match 1 was sealed as colophon 3");
+  expect(n({ event: "chronicle.seal", match: 1, colophon: 3 })).toBe("14:02:19 someone new sealed the chronicle of match 1 onto the scroll as their colophon 3");
   expect(n({ event: "denied", who: "守·57a0ee", reason: "grain", route: "POST /api/match/command", match: 1, type: "train", seat: 0, unit: "spearman" })).toContain(
     "守·57a0ee (east) tried to train a spearman but couldn't afford it: refused",
   );

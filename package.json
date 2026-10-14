@@ -10,7 +10,7 @@
     "test": "vitest run",
     "start": "node src/server.ts",
     "dev": "node --watch src/server.ts",
-    "e2e": "node e2e/scroll.e2e.ts"
+    "e2e": "node e2e/scroll.e2e.ts && node e2e/match.e2e.ts"
   },
   "dependencies": {
     "marked": "^18.0.14"
