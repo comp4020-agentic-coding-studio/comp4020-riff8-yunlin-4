@@ -186,7 +186,7 @@ Triage: deferred: marks tell people apart for a narrator; they were never an
 authentication. ADR 0002 says so; an HMAC-signed seal is the fix if marks ever
 gate anything.
 
-### F-26 [open] major · round 2 · narrate-only reader · logs
+### F-26 [fixed] major · round 2 · narrate-only reader · logs
 What: from the log alone a stranger followed the match but could not tell:
 what an "invalid" or unaffordable command was; "2 train orders to 0 units";
 "turned on unit 22" (whose, what kind); "took" (killed?); game time vs wall
@@ -196,3 +196,22 @@ Triage: accepted → T-10.
 ### F-27 idea · round 2 · economist · economy
 Surplus grain at the pop cap has nothing to buy. Deferred: one resource, one
 soldier type is the brief's scope.
+
+### F-28 [open] blocker · round 2 · newcomer · seats
+What: the browser page went blank mid-match (the testing tool, most likely),
+and on return with a new seal the newcomer saw only "A match is under way",
+locked out of their own match with no explanation.
+Triage: accepted → T-19, as a legibility fix. A seat is a seal (ADR 0002):
+a lost cookie is a new person, by design, and nothing can hand the seat back
+without accounts the README rules out. The page says so, and that the
+abandoned seat forfeits after five idle minutes, freeing the scroll.
+
+### F-29 [open] major · round 2 · newcomer · onboarding
+What: the how-to-play is in a collapsed panel; mode buttons (Gather, Order,
+Build) arm silently; "Play the bot" was a surprise second step.
+Triage: accepted → T-19 (visible first-steps line until the first order; a
+status line and crosshair when a mode is armed; say what Unroll leads to).
+
+### F-30 [open] minor · round 2 · newcomer · legibility
+Hills read as squiggles; no legend; map loads half below the fold.
+Triage: accepted → T-19 (one ink legend line; scroll the map into view).

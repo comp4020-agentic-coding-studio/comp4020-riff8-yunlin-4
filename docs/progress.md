@@ -38,7 +38,7 @@ alone; this file does its job.
 ### M3 — hold up (2:30–3:30)
 - [ ] Access audit subagent; fixes with specs
 - [x] `scripts/narrate.ts` + spec; `docs/logs.md` (20:12, pulled forward: it only needs the log shapes)
-- [ ] e2e crit scenario (two contexts)
+- [x] e2e crit scenario in two Chrome profiles, narrated from the log (21:22)
 - [ ] Round 3 verification
 
 ### Finish (3:30–4:00)
@@ -62,7 +62,7 @@ From round 1 (`docs/feedback.md`):
 
 From round 2, the log reader and the audit:
 
-- [ ] T-10 (F-26, major) log lines say what was refused and why, kinds of units, game time — done when: spec/narrate fixtures
+- [x] T-10 (F-26, major) log lines say what was refused and why, kinds of units, game time — done when: spec/narrate fixtures
 - [ ] T-11 (F-13, blocker) `build` resumes an own unfinished building — done when: sim spec from the repro
 - [ ] T-12 (F-14, blocker) stream writes guarded; ended streams leave the broadcast set — done when: spec/match-robustness
 - [ ] T-13 (F-15, F-24, major) per-side id sequences; fog-blind pathing; constant-time attack validation — done when: sim spec
@@ -70,4 +70,5 @@ From round 2, the log reader and the audit:
 - [ ] T-15 (F-18, major) bot keeps a home guard and musters waves — done when: soak, fresh tester
 - [ ] T-16 (F-19, major) warnings when your units are attacked and enemies sighted — done when: both clients show it
 - [ ] T-17 (F-20, major) pixiu's loop readable — done when: rules text names its path; heading shown
+- [ ] T-19 (F-28, F-29, F-30) the page explains a lost seat, first steps, armed modes, a legend — done when: fresh newcomer finds their way
 - [ ] T-18 (F-21, F-23, major) sides and creatures by silhouette; sticky HUD; focus ring — done when: screenshot rubric pass
