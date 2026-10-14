@@ -31,8 +31,8 @@ alone; this file does its job.
 - [ ] Per-seat stream, `/match` page + `public/match.js`, seat/join, results, chronicle seal
 - [x] `spec/access.test.ts`, 210 cases, no table/code disagreement (20:55)
 - [x] Log file + rotation on `/data/logs` (20:09, with the logging slice)
-- [ ] Triage round 1, fix blockers/majors
-- [ ] Link the game from the scroll page
+- [x] Triage round 1, fix blockers/majors (21:10)
+- [x] Link the game from the scroll page (21:11)
 - [ ] Round 2 playtest (all six, plus a narrate-only reader)
 
 ### M3 — hold up (2:30–3:30)
@@ -50,12 +50,24 @@ alone; this file does its job.
 
 From round 1 (`docs/feedback.md`):
 
-- [ ] T-1 (F-1, major) slower early military, bot thresholds in balance.ts — done when: soak matches end in 8–15 min, a fresh tester's first wave arrives later
-- [ ] T-2 (F-2, major) units hit while attacking a building turn on the attacker; labourers weaker — done when: sim spec of a labourer mob vs spearmen
-- [ ] T-3 (F-3, major) deaths and hall damage told in words in play.ts and the page — done when: play.ts prints "killed by" lines; page shows them
-- [ ] T-4 (F-4, major) relic claimable and readable — done when: sim spec claims it with the pixiu away
-- [ ] T-5 (F-5, major) labourers move on to the next seen grove; idle shown — done when: sim spec, both clients show idle count
-- [ ] T-6 (F-6, major) rules say where each creature lives — done when: rules text names places
-- [ ] T-7 (F-7, minor) build refusal says why — done when: validate spec
-- [ ] T-8 (F-8, minor) attackers move on to the next visible enemy — done when: sim spec
-- [ ] T-9 (F-9, F-10, minor) status shows match id and seed; selectors listed — done when: play.ts status shows seed
+- [x] T-1 (F-1, major) slower early military, bot thresholds in balance.ts — done when: soak matches end in 8–15 min, a fresh tester's first wave arrives later
+- [x] T-2 (F-2, major) units hit while attacking a building turn on the attacker; labourers weaker — done when: sim spec of a labourer mob vs spearmen
+- [x] T-3 (F-3, major) deaths and hall damage told in words in play.ts and the page — done when: play.ts prints "killed by" lines; page shows them
+- [x] T-4 (F-4, major) relic claimable and readable — done when: sim spec claims it with the pixiu away
+- [x] T-5 (F-5, major) labourers move on to the next seen grove; idle shown — done when: sim spec, both clients show idle count
+- [x] T-6 (F-6, major) rules say where each creature lives — done when: rules text names places
+- [x] T-7 (F-7, minor) build refusal says why — done when: validate spec
+- [x] T-8 (F-8, minor) attackers move on to the next visible enemy — done when: sim spec
+- [x] T-9 (F-9, F-10, minor) status shows match id and seed; selectors listed (21:00)
+
+From round 2, the log reader and the audit:
+
+- [ ] T-10 (F-26, major) log lines say what was refused and why, kinds of units, game time — done when: spec/narrate fixtures
+- [ ] T-11 (F-13, blocker) `build` resumes an own unfinished building — done when: sim spec from the repro
+- [ ] T-12 (F-14, blocker) stream writes guarded; ended streams leave the broadcast set — done when: spec/match-robustness
+- [ ] T-13 (F-15, F-24, major) per-side id sequences; fog-blind pathing; constant-time attack validation — done when: sim spec
+- [ ] T-14 (F-16, F-17, major) slot can't be held forever; seated players always get a stream — done when: spec
+- [ ] T-15 (F-18, major) bot keeps a home guard and musters waves — done when: soak, fresh tester
+- [ ] T-16 (F-19, major) warnings when your units are attacked and enemies sighted — done when: both clients show it
+- [ ] T-17 (F-20, major) pixiu's loop readable — done when: rules text names its path; heading shown
+- [ ] T-18 (F-21, F-23, major) sides and creatures by silhouette; sticky HUD; focus ring — done when: screenshot rubric pass
