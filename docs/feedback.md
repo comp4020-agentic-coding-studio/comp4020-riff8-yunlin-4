@@ -206,7 +206,7 @@ a lost cookie is a new person, by design, and nothing can hand the seat back
 without accounts the README rules out. The page says so, and that the
 abandoned seat forfeits after five idle minutes, freeing the scroll.
 
-### F-29 [fixed] major · round 2 · newcomer · onboarding
+### F-29 [verified] major · round 2 · newcomer · onboarding
 What: the how-to-play is in a collapsed panel; mode buttons (Gather, Order,
 Build) arm silently; "Play the bot" was a surprise second step.
 Triage: accepted → T-19 (visible first-steps line until the first order; a
@@ -257,7 +257,7 @@ Triage: accepted → T-21; enemy-caused deaths now raise both.
 21 labourers idled at the hall although groves 19–21 tiles away had been seen.
 Triage: accepted → T-21; REGROVE_FAR_RADIUS 12 → 24, spec added.
 
-### F-36 [open] major · round 3 · v1, v2 (and round 2 economist, explorer) · combat
+### F-36 [fixed] major · round 3 · v1, v2 (and round 2 economist, explorer) · combat
 Idle spearmen eleven tiles away ignore a raid killing their own labourers.
 Four independent reports across two rounds.
 Triage: accepted → T-22 (idle spearmen go to the help of their own people
@@ -270,7 +270,7 @@ pixiu's next waypoint, which is information a player can only infer by
 watching it; the rules text now traces its loop (F-20), which is the plan-
 ahead information. For a human to review.
 
-### F-38 [open] minor · round 3 · v1, v2 · wording
+### F-38 [fixed] minor · round 3 · v1, v2 · wording
 "spearmans". Triage: accepted → T-22.
 
 ### F-39 idea · round 3 · v1 · economy
@@ -294,3 +294,27 @@ Costs aren't on the buttons ("not enough grain" with 150 in hand for a
 (`ux3-11`) the page is scrolled past its heading and the HUD is pinned at the
 top; the sticky band from T-18 works at 1280×800. At 390px the band is taller
 and the reviewer scrolled it into place, which is the band working too.
+
+Round 3 newcomer (fresh, browser), verifying F-29 and F-30:
+- F-29 [verified]: the first-steps line and "Now click a grove" prompts
+  "turned a mystery into one clear step"; Select idle labourers was "the star".
+- F-21 [verified in part]: solid vs hollow told own from enemy, with the legend.
+- F-36's raid-death warning reached the log at 6:49 but the banner only at
+  7:09 (F-44).
+
+### F-43 [open] major · round 3 · newcomer3 · front page
+The game's link sits below a very tall painting; a cold visitor might never
+scroll to it. Triage: accepted → T-23 (one quiet line near the top).
+
+### F-44 [open] major · round 3 · newcomer3, UX · warning
+The banner comes only when the hall is hit; earlier deaths go to the log only,
+with coordinates a newcomer can't read. Triage: accepted → T-23 (first enemy-
+caused death raises the banner, the place said in words).
+
+### F-45 [open] minor · round 3 · newcomer3 · controls
+The first-steps and "Now click" lines shift the map, so a click aimed at a
+grove misses (worst at 390px). Triage: accepted → T-23 (space reserved).
+
+### F-46 minor · round 3 · newcomer3 · touch
+Phone play is only good for the first minute. Triage: deferred: the brief
+says desktop first, touch is a stretch.
