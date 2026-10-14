@@ -30,6 +30,17 @@ describe("warnings and headings", () => {
     const died = { type: "unit.died", tick: 2, side: 0, unit: 9, kind: "spearman", cause: "soldier", byKind: "spearman", bySide: 1, x: 90, y: 2 } as any;
     expect(attackWarnings(a, b, [died], 0)).toHaveLength(2);
   });
+  it("warns about own deaths to the enemy or a creature even with no hp drop seen", () => {
+    const a = snapshot(v([]));
+    const d = (unit: number, cause: string, bySide: any, byKind: string) => ({ type: "unit.died", tick: 2, side: 0, unit, kind: "labourer", cause, byKind, bySide, x: 91, y: 0 }) as any;
+    const evs = [d(1, "soldier", 1, "spearman"), d(2, "soldier", 1, "spearman"), d(3, "creature", "wild", "nian")];
+    const w = attackWarnings(a, snapshot(v([], 2)), evs, 0);
+    expect(w).toHaveLength(1);
+    expect(w[0]).toMatch(/^YOUR LABOURERS ARE UNDER ATTACK near \(91,0\): 3 killed by enemy spearmen and the /);
+    expect(attackWarnings(a, snapshot(v([], 2)), [d(4, "soldier", 0, "spearman")], 0)).toEqual([]);
+    expect(sightings(a, v([], 2), evs)).toEqual(["Enemy spearmen sighted near (91,0) — they killed 2 of yours"]);
+    expect(sightings(a, v([], 2), [d(3, "creature", "wild", "nian")])).toEqual([]);
+  });
   it("reports newly sighted enemy spearmen with a count", () => {
     const foes = [1, 2, 3].map((i) => ent(10 + i, "spearman", 1, 21 + i, 10));
     expect(sightings(undefined, v(foes))).toEqual(["Enemy spearmen sighted near (22,10) — 3 of them"]);

@@ -21,7 +21,7 @@ export const QILIN_GATHER_MULT = 2; // gather speed near a peaceful qilin's glad
 export const REGROVE_RADIUS = 4; // how far a labourer looks for the next tile when one runs out
 // then, if none, how far it looks for another grove its side has seen (never
 // one inside the nian's leash) before it goes idle
-export const REGROVE_FAR_RADIUS = 12;
+export const REGROVE_FAR_RADIUS = 24;
 export const GROVE_GRAIN = 150;
 export const RICH_GROVE_GRAIN = 300; // per tile of the nian's grove (it has 28)
 export const GLADE_GROVE_GRAIN = 250; // the groves beside the qilin's glade

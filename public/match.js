@@ -309,8 +309,8 @@ function watch() {
 
 // One line per area: a fresh hit in an area already warned about within the
 // last few seconds only refreshes the alert, it isn't logged again.
-function attacked(key, kinds, x, y) {
-  const text = `Your ${[...kinds].map((k) => `${k}s`).join(" and ")} are under attack near (${x},${y})`;
+function attacked(key, kinds, x, y, killed = "") {
+  const text = `Your ${[...kinds].map((k) => `${k}s`).join(" and ")} are under attack near (${x},${y})${killed}`;
   const old = alerts.attack.get(key);
   const tick = view?.tick ?? 0;
   alerts.attack.set(key, { text, tick });
@@ -974,11 +974,27 @@ function pushLog(line) {
 
 function addEvents(events) {
   const me = view?.seat ?? status?.you;
+  const slain = new Map(); // area -> { kinds, x, y, n, by, foe }
   for (const ev of events) {
     const text = describe(ev);
     if (text) pushLog(`${clock(ev.tick)} ${text}`);
-    if (ev.type === "unit.died" && ev.side === me && !BUILDINGS.has(ev.kind) && view) {
-      attacked(areaKey(ev.x, ev.y), new Set([ev.kind]), ev.x, ev.y);
+    if (ev.type === "unit.died" && ev.side === me && !BUILDINGS.has(ev.kind) && view && (ev.cause === "creature" || ev.bySide !== me)) {
+      const k = areaKey(ev.x, ev.y);
+      const a = slain.get(k) ?? { kinds: new Set(), x: ev.x, y: ev.y, n: 0, by: new Set(), foe: false };
+      a.kinds.add(ev.kind);
+      a.n++;
+      a.by.add(ev.cause === "creature" ? `the ${NAMES[ev.byKind] ?? ev.byKind}` : `enemy ${ev.byKind === "spearman" ? "spearmen" : ev.byKind + "s"}`);
+      if (ev.cause !== "creature" && ev.bySide !== "wild") a.foe = true;
+      slain.set(k, a);
+    }
+  }
+  for (const [k, a] of slain) {
+    attacked(k, a.kinds, a.x, a.y, `: ${a.n} killed by ${[...a.by].join(" and ")}`);
+    // an enemy-caused death is a sighting where it happened, if none was seen
+    if (a.foe && !alerts.sight.has(k)) {
+      const text = `Enemy spearmen sighted near (${a.x},${a.y}) — they killed ${a.n} of yours`;
+      alerts.sight.set(k, { text, tick: view.tick });
+      pushLog(`${clock(view.tick)} ${text}`);
     }
   }
   if (view) renderAlerts(ownPieces((e) => e.kind === "hall")[0]);

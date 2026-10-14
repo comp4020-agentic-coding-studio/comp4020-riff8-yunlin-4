@@ -88,6 +88,21 @@ describe("economy", () => {
     expect(next.some((g, i) => g < def.grove[[5, 6][Math.floor(i / 3)] * s.width + 98 + (i % 3)])).toBe(true);
   });
 
+  it("sends labourers to a seen grove ~19 tiles off when the home groves are all dry, from the hall too", () => {
+    const s = createMatch("scroll-1", 1);
+    const labs = s.entities.filter((e) => e.side === 0 && e.kind === "labourer");
+    s.groveGrain[8 * s.width + 108] = 1;
+    command(s, 0, { type: "gather", units: labs.map((l) => l.id), x: 108, y: 8 });
+    const G = "g".charCodeAt(0);
+    for (let i = 0; i < s.groveGrain.length; i++) s.groveGrain[i] = 0;
+    // a grove seen at (89..91, 1..2), 17-19 tiles from the hall
+    for (let y = 1; y <= 2; y++) for (let x = 89; x <= 91; x++) { s.groveGrain[y * s.width + x] = 40; s.revealed[0][y * s.width + x] = G; }
+    run(s, 600);
+    const left = [1, 2].flatMap((y) => [89, 90, 91].map((x) => s.groveGrain[y * s.width + x])).reduce((a, b) => a + b, 0);
+    expect(left).toBeLessThan(240);
+    expect(labs.some((l) => l.task !== "idle")).toBe(true);
+  });
+
   it("goes home and idles when the only seen grove left is inside the nian's leash", () => {
     const s = createMatch("scroll-1", 1);
     const isNian = (i: number) => i % s.width >= 56 && i % s.width <= 60 && i < 3 * s.width;

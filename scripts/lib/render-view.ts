@@ -196,18 +196,50 @@ export function attackWarnings(prev: Snapshot | undefined, now: Snapshot, events
     const was = prev?.ownUnits?.[Number(id)];
     if (was && u.hp < was.hp) note(u.kind, u.x, u.y);
   }
-  for (const e of events) if (e.type === "unit.died" && e.side === me && e.kind !== "hall" && e.kind !== "barracks") note(e.kind, e.x, e.y);
-  return [...hit.values()].map((a) => `YOUR ${[...a.kinds].map((k) => k + "s").join(" AND ").toUpperCase()} ARE UNDER ATTACK near (${a.x},${a.y})`);
+  const killed = new Map<string, number>();
+  const by = new Map<string, Set<string>>();
+  for (const e of events) {
+    if (e.type !== "unit.died" || e.side !== me || e.kind === "hall" || e.kind === "barracks") continue;
+    if (e.cause !== "creature" && e.bySide === me) continue;
+    note(e.kind, e.x, e.y);
+    const k = areaKey(e.x, e.y);
+    killed.set(k, (killed.get(k) ?? 0) + 1);
+    const names = by.get(k) ?? new Set<string>();
+    names.add(e.cause === "creature" ? `the ${kindName(e.byKind)}` : `enemy ${e.byKind === "spearman" ? "spearmen" : e.byKind + "s"}`);
+    by.set(k, names);
+  }
+  return [...hit.entries()].map(([k, a]) => {
+    const head = `YOUR ${[...a.kinds].map((x) => x + "s").join(" AND ").toUpperCase()} ARE UNDER ATTACK near (${a.x},${a.y})`;
+    return killed.has(k) ? `${head}: ${killed.get(k)} killed by ${[...by.get(k)!].join(" and ")}` : head;
+  });
 }
 
 // "Enemy spearmen sighted near (28,10) — 7 of them": enemy soldiers in view
 // now that were not in view at the last snapshot.
-export function sightings(prev: Snapshot | undefined, v: SeatView): string[] {
+// An own unit killed by the enemy since then counts as a sighting where it died.
+export function sightings(prev: Snapshot | undefined, v: SeatView, events: SimEvent[] = []): string[] {
   const before = new Set(prev?.soldiers ?? []);
   const fresh = v.entities.filter((e) => e.side !== v.seat && e.side !== "wild" && e.kind === "spearman" && !before.has(e.id));
-  const groups = new Map<string, VisibleEntity[]>();
-  for (const e of fresh) groups.set(areaKey(e.x, e.y), [...(groups.get(areaKey(e.x, e.y)) ?? []), e]);
-  return [...groups.values()].map((g) => `Enemy spearmen sighted near (${g[0].x},${g[0].y}) — ${g.length} of them`);
+  const groups = new Map<string, { x: number; y: number; n: number }>();
+  for (const e of fresh) {
+    const k = areaKey(e.x, e.y);
+    const g = groups.get(k) ?? { x: e.x, y: e.y, n: 0 };
+    g.n++;
+    groups.set(k, g);
+  }
+  const slain = new Map<string, { x: number; y: number; n: number }>();
+  for (const e of events) {
+    if (e.type !== "unit.died" || e.side !== v.seat || e.cause === "creature" || e.bySide === v.seat || e.bySide === "wild") continue;
+    const k = areaKey(e.x, e.y);
+    if (groups.has(k)) continue;
+    const g = slain.get(k) ?? { x: e.x, y: e.y, n: 0 };
+    g.n++;
+    slain.set(k, g);
+  }
+  return [
+    ...[...groups.values()].map((g) => `Enemy spearmen sighted near (${g.x},${g.y}) — ${g.n} of them`),
+    ...[...slain.values()].map((g) => `Enemy spearmen sighted near (${g.x},${g.y}) — they killed ${g.n} of yours`),
+  ];
 }
 
 const COMPASS = ["east", "south-east", "south", "south-west", "west", "north-west", "north", "north-east"];

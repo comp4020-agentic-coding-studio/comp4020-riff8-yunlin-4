@@ -94,7 +94,7 @@ async function look(s?: any, quiet = false): Promise<void> {
   }
   const lastTick = same && saved.snap && saved.snap.tick <= v.tick ? (saved.lastTick ?? -1) : -1;
   const evs: any[] = (s.recentEvents ?? []).filter((e: any) => e.tick > lastTick);
-  warn.push(...attackWarnings(prev, now, evs, v.seat), ...sightings(prev, v));
+  warn.push(...attackWarnings(prev, now, evs, v.seat), ...sightings(prev, v, evs));
   // A unit that vanished without a death event in the log (older than the
   // server's recent-event window) is still reported, from the snapshot diff.
   const told = new Set(evs.filter((e) => e.type === "unit.died").map((e) => e.unit));
