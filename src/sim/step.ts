@@ -6,6 +6,7 @@
 
 import {
   ACQUIRE_RADIUS,
+  DEFEND_RADIUS,
   BUILDINGS,
   CARRY,
   GATHER_TICKS,
@@ -324,6 +325,27 @@ function acquire(ctx: Ctx, e: Entity, seat: Seat, onlyMe = false): Entity | unde
   return best;
 }
 
+// An enemy unit of the other seat, in view and within the auto-attack leash,
+// that is attacking one of this seat's units within DEFEND_RADIUS of `e`.
+// Creatures never count. Nearest first; ties go to the lower id.
+function attackerOfMine(ctx: Ctx, e: Entity, seat: Seat): Entity | undefined {
+  const s = ctx.state;
+  let best: Entity | undefined;
+  let bestD = Infinity;
+  for (const t of s.entities) {
+    if (t.hp <= 0 || t.side === seat || t.side === "wild" || !isUnit(t.kind)) continue;
+    if (t.order?.type !== "attack" || t.task !== "attacking") continue;
+    const victim = findEntity(s, t.order.target);
+    if (!victim || victim.hp <= 0 || victim.side !== seat || !isUnit(victim.kind) || dist(e, victim) > DEFEND_RADIUS) continue;
+    if (!seenBy(s, ctx.vis[seat], seat, t)) continue;
+    const d = dist(e, t);
+    if (d >= ACQUIRE_RADIUS * 2 || d >= bestD) continue;
+    best = t;
+    bestD = d;
+  }
+  return best;
+}
+
 function unitTick(ctx: Ctx, e: Entity): void {
   const s = ctx.state;
   const seat = e.side as Seat;
@@ -332,7 +354,7 @@ function unitTick(ctx: Ctx, e: Entity): void {
   const known = ctx.known[seat];
 
   if (e.order === null && e.kind === "spearman") {
-    const t = acquire(ctx, e, seat);
+    const t = acquire(ctx, e, seat) ?? attackerOfMine(ctx, e, seat);
     if (t) e.order = { type: "attack", target: t.id, auto: true };
   }
   const o = e.order;

@@ -5,6 +5,7 @@
 // colour: own pieces are solid ink, the other side's hollow, creatures ringed
 // with a jagged brush line.
 
+const plural = (k) => (k === "spearman" ? "spearmen" : `${k}s`);
 const T = 22; // CSS px per tile
 const MAX_IDS = 40;
 const INK = "43, 39, 33";
@@ -310,7 +311,7 @@ function watch() {
 // One line per area: a fresh hit in an area already warned about within the
 // last few seconds only refreshes the alert, it isn't logged again.
 function attacked(key, kinds, x, y, killed = "") {
-  const text = `Your ${[...kinds].map((k) => `${k}s`).join(" and ")} are under attack near (${x},${y})${killed}`;
+  const text = `Your ${[...kinds].map((k) => plural(k)).join(" and ")} are under attack near (${x},${y})${killed}`;
   const old = alerts.attack.get(key);
   const tick = view?.tick ?? 0;
   alerts.attack.set(key, { text, tick });
@@ -945,7 +946,7 @@ function describe(ev) {
       if (ev.side === "wild") return `The ${name(ev.kind)} was killed by ${ev.bySide === me ? "your" : "enemy"} ${ev.byKind}s ${where}`;
       const mine = ev.side === me;
       if (ev.cause === "creature") return `${mine ? "Your" : "Enemy"} ${ev.kind} ${ev.unit} was killed by the ${name(ev.byKind)} ${where}`;
-      return mine ? `Your ${ev.kind} ${ev.unit} fell to enemy ${ev.byKind}s ${where}` : `Enemy ${ev.kind} ${ev.unit} was killed by your ${ev.byKind}s ${where}`;
+      return mine ? `Your ${ev.kind} ${ev.unit} fell to enemy ${plural(ev.byKind)} ${where}` : `Enemy ${ev.kind} ${ev.unit} was killed by your ${plural(ev.byKind)} ${where}`;
     }
     case "build.start":
       return ev.seat === me ? `${cap(name(ev.kind))} begun` : `The enemy has begun a ${name(ev.kind)}`;
@@ -983,7 +984,7 @@ function addEvents(events) {
       const a = slain.get(k) ?? { kinds: new Set(), x: ev.x, y: ev.y, n: 0, by: new Set(), foe: false };
       a.kinds.add(ev.kind);
       a.n++;
-      a.by.add(ev.cause === "creature" ? `the ${NAMES[ev.byKind] ?? ev.byKind}` : `enemy ${ev.byKind === "spearman" ? "spearmen" : ev.byKind + "s"}`);
+      a.by.add(ev.cause === "creature" ? `the ${NAMES[ev.byKind] ?? ev.byKind}` : `enemy ${plural(ev.byKind)}`);
       if (ev.cause !== "creature" && ev.bySide !== "wild") a.foe = true;
       slain.set(k, a);
     }

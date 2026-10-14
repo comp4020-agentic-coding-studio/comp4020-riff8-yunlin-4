@@ -29,6 +29,7 @@ export const RELIC_BONUS = 400;
 
 // Behaviour
 export const ACQUIRE_RADIUS = 6; // idle spearmen pick up visible enemies this close; attackers whose target died, the next one
+export const DEFEND_RADIUS = 12; // an idle spearman goes to the help of an own unit this close that a visible enemy unit is attacking
 export const RETALIATE_RADIUS = 2; // a unit struck while beating on a building turns on an attacker this close
 export const REPATH_TICKS = 8; // a chaser re-plans at most this often
 export const PATH_BUDGET = 20000; // A* nodes expanded per tick, across all pieces

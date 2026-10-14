@@ -59,6 +59,38 @@ describe("spearmen against a labourer mob (F-2)", () => {
   });
 });
 
+describe("defending nearby people", () => {
+  function raid(order: boolean, byCreature = false) {
+    const s = fresh();
+    const lab = place(s, "labourer", 0, 30, 10);
+    const guard = place(s, "spearman", 0, 40, 10);
+    if (order) command(s, 0, { type: "move", units: [guard.id], x: 40, y: 20 });
+    const foe = byCreature ? place(s, "labourer", 1, 29, 10) : place(s, "spearman", 1, 29, 10);
+    if (byCreature) {
+      foe.side = "wild";
+      foe.kind = "pixiu";
+    }
+    foe.order = { type: "attack", target: lab.id, auto: false };
+    run(s, 3);
+    return { s, guard, foe };
+  }
+  it("an idle spearman ten tiles off goes to and attacks the attacker", () => {
+    const { s, guard, foe } = raid(false);
+    expect(guard.order).toMatchObject({ type: "attack", target: foe.id });
+    const x0 = guard.x;
+    run(s, 20);
+    expect(guard.x).toBeLessThan(x0);
+  });
+  it("a spearman on an explicit move order is not pulled", () => {
+    const { guard } = raid(true);
+    expect(guard.order).toMatchObject({ type: "move" });
+  });
+  it("a labourer hit by a creature does not pull it", () => {
+    const { guard } = raid(false, true);
+    expect(guard.order).toBeNull();
+  });
+});
+
 describe("after the target falls (F-8)", () => {
   it("a group sent to attack moves on to the nearest enemy in view, units before buildings", () => {
     const s = fresh();

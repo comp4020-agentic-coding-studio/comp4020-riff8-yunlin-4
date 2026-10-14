@@ -4,6 +4,7 @@
 import { BUILDINGS } from "../../src/sim/balance.ts";
 import type { Kind, SeatView, SimEvent, VisibleEntity } from "../../src/sim/types.ts";
 
+const plural = (k: string): string => (k === "spearman" ? "spearmen" : `${k}s`);
 const SEAT_NAMES = ["east", "west"];
 const IN_VIEW: Record<string, string> = { p: ".", r: "~", f: "=", g: "T", h: "^", l: '"', x: "X" };
 const REMEMBERED: Record<string, string> = { p: ",", r: "-", f: ":", g: "t", h: "'", l: "`", x: "x" };
@@ -156,7 +157,7 @@ export function describeEvent(ev: SimEvent, me: number): string | null {
       const owner = mine ? "your" : "enemy";
       if (ev.cause === "creature") return `${t} ${owner} ${ev.kind} ${ev.unit} was killed by the ${kindName(ev.byKind)} ${where}`;
       return mine
-        ? `${t} your ${ev.kind} ${ev.unit} fell to enemy ${ev.byKind}s ${where}`
+        ? `${t} your ${ev.kind} ${ev.unit} fell to enemy ${plural(ev.byKind)} ${where}`
         : `${t} enemy ${ev.kind} ${ev.unit} was killed by your ${ev.byKind}s ${where}`;
     }
     case "creature.aggro":
@@ -205,11 +206,11 @@ export function attackWarnings(prev: Snapshot | undefined, now: Snapshot, events
     const k = areaKey(e.x, e.y);
     killed.set(k, (killed.get(k) ?? 0) + 1);
     const names = by.get(k) ?? new Set<string>();
-    names.add(e.cause === "creature" ? `the ${kindName(e.byKind)}` : `enemy ${e.byKind === "spearman" ? "spearmen" : e.byKind + "s"}`);
+    names.add(e.cause === "creature" ? `the ${kindName(e.byKind)}` : `enemy ${plural(e.byKind)}`);
     by.set(k, names);
   }
   return [...hit.entries()].map(([k, a]) => {
-    const head = `YOUR ${[...a.kinds].map((x) => x + "s").join(" AND ").toUpperCase()} ARE UNDER ATTACK near (${a.x},${a.y})`;
+    const head = `YOUR ${[...a.kinds].map((x) => plural(x)).join(" AND ").toUpperCase()} ARE UNDER ATTACK near (${a.x},${a.y})`;
     return killed.has(k) ? `${head}: ${killed.get(k)} killed by ${[...by.get(k)!].join(" and ")}` : head;
   });
 }

@@ -61,7 +61,7 @@ export const RULES_TEXT = [
   "  attack: go after an enemy or creature you can see.",
   "  train: a hall or barracks adds a labourer or spearman to its queue (at most five).",
   "  stop: stand still.",
-  "Idle spearmen attack enemies that come near them. A unit beating on a building turns on whoever strikes it.",
+  "Idle spearmen attack enemies that come near them and go to the help of your people attacked nearby. A unit beating on a building turns on whoever strikes it.",
   "Units sent to attack move on to the nearest enemy in view when their target falls.",
   "Labourers fight poorly: spearmen are the answer to spearmen.",
   "",
