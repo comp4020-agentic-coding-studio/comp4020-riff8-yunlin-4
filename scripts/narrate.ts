@@ -247,7 +247,7 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
       const verb: Record<string, string> = { move: "move", attack: "attack", gather: "gather", stop: "stop" };
       if (type === "build") return `${actor()} ordered ${n > 1 ? `${n} barracks` : "a barracks"} built`;
       if (n > 1) {
-        return `${actor()} sent ${verb[type] ?? tidy(type)} orders ${n} times${units === undefined ? "" : ` (${units} units named in all)`}`;
+        return `${actor()} sent ${verb[type] ?? tidy(type)} orders ${n} times${units === undefined ? "" : ` (${units} unit-orders in all, counting a unit once per order)`}`;
       }
       const what = verb[type] ?? (type === "" ? "do something" : tidy(type));
       return `${actor()} ordered ${units === undefined || units === 0 ? "" : `${units} ${units === 1 ? "unit" : "units"} `}to ${what}`.replace("ordered to", "ordered");

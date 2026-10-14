@@ -186,7 +186,7 @@ Triage: deferred: marks tell people apart for a narrator; they were never an
 authentication. ADR 0002 says so; an HMAC-signed seal is the fix if marks ever
 gate anything.
 
-### F-26 [fixed] major · round 2 · narrate-only reader · logs
+### F-26 [verified] major · round 2 · narrate-only reader · logs
 What: from the log alone a stranger followed the match but could not tell:
 what an "invalid" or unaffordable command was; "2 train orders to 0 units";
 "turned on unit 22" (whose, what kind); "took" (killed?); game time vs wall
@@ -367,3 +367,14 @@ The first-steps hint vanished after a move order, though it teaches
 gathering, so labourers sat idle; selecting also moved the map ~20px.
 Triage: accepted → T-25: only a gather order retires the hint; the controls
 row keeps its height. Checked in a browser (canvas top 132 → 132).
+
+Fresh log-only reader on a round 3 match:
+- F-26 [verified]: whole match narrated with no blockers: who, sides,
+  winner, how and when, every refusal and why.
+
+### F-51 [fixed] major · round 3 · log reader 2 · logs
+"sent attack orders 8 times (63 units named in all)" read as more units than
+existed. Triage: accepted → reworded "63 unit-orders in all, counting a unit
+once per order". Their minors (game-time stamps out of order between an
+order and its completion; no running totals) deferred: both are true to when
+things happened, and totals belong to the chronicle.

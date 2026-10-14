@@ -24,7 +24,7 @@ it("narrates a whole little match", () => {
   expect(out[1]).toContain("called in the bot");
   expect(out[2]).toContain("鑑·3fa9c2 holds the east seat, the bot the west; creatures (年 蛟龍 麒麟 貔貅) belong to neither");
   expect(out[3]).toBe("14:02:19 鑑·3fa9c2 (east) ordered 6 units to move");
-  expect(out[4]).toContain("sent move orders 3 times (14 units named in all)");
+  expect(out[4]).toContain("sent move orders 3 times (14 unit-orders in all, counting a unit once per order)");
   expect(out[5]).toContain("年 nian (a creature, no one's side) attacked 鑑·3fa9c2 (east)'s unit 14");
   expect(out[6]).toBe("14:02:19 3 of 鑑·3fa9c2 (east)'s labourers were killed by the 蛟龍 jiaolong");
   expect(out[7]).toContain("fell to 鑑·3fa9c2 (east)'s spearman");
@@ -49,7 +49,7 @@ it("shows game time, tags sides, and says what was tried", () => {
   ).toContain("tried to build a barracks where it can't stand (a barracks needs 2×2 open plain ground): refused");
   expect(n({ event: "command", who: "守·57a0ee", match: 1, tick: 4, seat: 0, type: "train", unit: "spearman", n: 2, units: 0 })).toContain("queued 2 spearmen at the barracks");
   expect(n({ event: "command", who: "守·57a0ee", match: 1, tick: 4, seat: 0, type: "train", unit: "labourer", n: 1, units: 0 })).toContain("queued a labourer at the hall");
-  expect(n({ event: "command", who: "守·57a0ee", match: 1, tick: 4, seat: 0, type: "attack", n: 10, units: 36 })).toContain("sent attack orders 10 times (36 units named in all)");
+  expect(n({ event: "command", who: "守·57a0ee", match: 1, tick: 4, seat: 0, type: "attack", n: 10, units: 36 })).toContain("sent attack orders 10 times (36 unit-orders in all, counting a unit once per order)");
   expect(n({ event: "creature.aggro", match: 1, tick: 8, creature: "nian", target: 22, targetKind: "labourer", targetSeat: 0, owner: "守·57a0ee" })).toContain(
     "attacked 守·57a0ee (east)'s labourer 22",
   );
