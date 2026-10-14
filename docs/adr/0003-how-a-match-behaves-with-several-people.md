@@ -31,7 +31,8 @@ that seat gets that seat's view. Another browser is another person.
 
 **Dropping, forfeit, abandonment.** A seat that sends no command for five
 minutes forfeits; a match with no command from anyone for ten minutes is
-abandoned. Both are logged (`match.forfeit`, `match.end` with reason). A
+abandoned; a match nobody joins lapses after three minutes (`lapsed`, no
+winner). Both are logged (`match.forfeit`, `match.end` with reason). A
 player can forfeit on purpose. No timer runs while no match exists, so the
 machine can still auto-stop. A finished match frees the slot.
 
@@ -67,7 +68,10 @@ refuses to start with it when `FLY_APP_NAME` is set.
   a per-tick node budget, so a crowd of unreachable goals delays paths rather
   than the tick.
 - Holding the slot: a visitor who creates a match and leaves holds it for at
-  most ten minutes; one who plays the bot and stops commanding forfeits after
+  most three minutes (`MATCH_WAIT_MS`); if someone else was refused
+  `match-busy` meanwhile, the lapsed creator can't create again for the next
+  three minutes (`409 wait-your-turn`), so walking away can't hold the slot by
+  recreating; one who plays the bot and stops commanding forfeits after
   five. One who keeps commanding the bot could hold it for good, so a match
   against the bot that has run ten minutes yields when another visitor asks
   to play: it ends with reason `yielded` (no winner) and the asker's match is

@@ -48,12 +48,30 @@ it("forfeits an idle seat, abandons a silent match and an unjoined one", async (
     await twoPlayerMatch(s.base);
     await waitForLog(s, (l) => l.event === "match.end" && l.reason === "abandoned", 4000);
 
-    // nobody joins
+    expect(s.json().filter((l) => l.event === "match.end" && l.reason === "abandoned")).toHaveLength(1);
+  } finally {
+    await s.stop();
+  }
+});
+
+it("a waiting match lapses; its creator is turned away only if someone else tried", async () => {
+  const s = await startServer({ MATCH_WAIT_MS: "800" });
+  try {
     const c = await newVisitor(s.base);
+    const other = await newVisitor(s.base);
+    const third = await newVisitor(s.base);
+    // nobody tries: the lapsed creator may create again at once
     expect((await send(s.base, "/api/match", {}, c)).status).toBe(201);
-    await new Promise((r) => setTimeout(r, 1500));
-    expect((await status(s.base, c)).result).toMatchObject({ reason: "abandoned", winner: null });
-    expect(s.json().filter((l) => l.event === "match.end" && l.reason === "abandoned")).toHaveLength(2);
+    await waitForLog(s, (l) => l.event === "match.end" && l.reason === "lapsed", 3000);
+    expect((await status(s.base, c)).result).toMatchObject({ reason: "lapsed", winner: null });
+    expect((await send(s.base, "/api/match", {}, c)).status).toBe(201);
+    // someone else is refused while it waits
+    expect((await send(s.base, "/api/match", {}, other)).status).toBe(409);
+    await waitForLog(s, (l) => l.event === "match.end" && l.reason === "lapsed" && l.east === markOf(c.token) && s.json().filter((x) => x.reason === "lapsed").length === 2, 3000);
+    const again = await send(s.base, "/api/match", {}, c);
+    expect(again.status).toBe(409);
+    expect(again.data).toMatchObject({ error: "wait-your-turn" });
+    expect((await send(s.base, "/api/match", {}, third)).status).toBe(201);
   } finally {
     await s.stop();
   }

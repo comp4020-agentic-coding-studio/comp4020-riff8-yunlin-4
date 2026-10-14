@@ -76,5 +76,5 @@ export const RULES_TEXT = [
   `The relic is on the little island in mid-river, halfway between the north and south fords (x 55–56, y 15–16), reached along the causeway from either ford.`,
   `A labourer who steps onto it while the pixiu is out on a ford or a bank claims ${RELIC_BONUS} grain, once per match, for whoever gets there first.`,
   "",
-  "A side that sends no command for 5 minutes forfeits. A match with no command from anyone for 10 minutes is abandoned.",
+  "A side that sends no command for 5 minutes forfeits. A match with no command from anyone for 10 minutes is abandoned. A match nobody joins lapses after three minutes.",
 ].join("\n");

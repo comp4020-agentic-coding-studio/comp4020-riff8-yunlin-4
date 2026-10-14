@@ -35,6 +35,8 @@ if (MANUAL && process.env.FLY_APP_NAME) {
 const TICK_MS = 250;
 const FORFEIT_MS = Number(process.env.MATCH_IDLE_FORFEIT_MS ?? 5 * 60_000);
 const ABANDON_MS = Number(process.env.MATCH_ABANDON_MS ?? 10 * 60_000);
+// A match nobody joins (and no bot is called into) lapses after this long (ADR 0003).
+const WAIT_MS = Number(process.env.MATCH_WAIT_MS ?? 3 * 60_000);
 const RATE_PER_SECOND = 10;
 const COMMAND_LOG_MS = 2000;
 const MAX_STREAMS = Number(process.env.MATCH_STREAMS_MAX ?? 100);
@@ -49,7 +51,7 @@ const MAX_STREAM_MS = Number(process.env.MATCH_STREAM_MAX_MS ?? 15 * 60_000);
 const CHRONICLE_MAX = 320;
 const NOT_YOURS = { error: "not-yours", message: "no such unit of yours" };
 
-export type Reason = "hall" | "forfeit" | "abandoned" | "restart" | "time" | "yielded";
+export type Reason = "hall" | "forfeit" | "abandoned" | "restart" | "time" | "yielded" | "lapsed";
 
 export interface Outcome {
   status: number;
@@ -93,6 +95,10 @@ const RECENT = 200;
 let tickTimer: NodeJS.Timeout | undefined;
 let idleTimer: NodeJS.Timeout | undefined;
 let waitTimer: NodeJS.Timeout | undefined;
+// Someone was refused match-busy while the current waiting match sat unjoined.
+let refusedWhileWaiting = false;
+// A creator whose waiting match lapsed while someone else was refused: not first in line again.
+let lapsedCreator: { hash: string; at: number } | null = null;
 
 const hashOf = (token: string): string => createHash("sha256").update(token).digest("hex");
 
@@ -204,11 +210,17 @@ export function create(token: string): Outcome {
   if (live) {
     if (seatOfLive(token) !== null) return refuse(409, "already-seated", "You already hold a seat in this match.", { match: live.id });
     if (!(live.bot && live.status === "playing" && Date.now() - live.startedAt >= BOT_YIELD_MS)) {
+      if (live.status === "waiting") refusedWhileWaiting = true;
       return refuse(409, "match-busy", "A match is already under way; only one runs at a time.", { match: live.id });
     }
     // Someone else wants the slot and the bot match has had its time.
     end(null, "yielded");
   }
+  if (lapsedCreator && Date.now() - lapsedCreator.at < WAIT_MS && lapsedCreator.hash === hashOf(token)) {
+    return refuse(409, "wait-your-turn", "Someone else was waiting to play; give them a few minutes.");
+  }
+  lapsedCreator = null;
+  refusedWhileWaiting = false;
   const mapId = MAP_IDS[0]!;
   const seed = randomInt(0, 2 ** 31 - 1);
   const id = createMatchRow(mapId, seed, markOf(token), hashOf(token));
@@ -230,8 +242,10 @@ export function create(token: string): Outcome {
   };
   log("match.create", { who: markOf(token), match: id, seat: 0 });
   waitTimer = setTimeout(() => {
-    if (live?.id === id && live.status === "waiting") end(null, "abandoned");
-  }, ABANDON_MS);
+    if (live?.id !== id || live.status !== "waiting") return;
+    if (refusedWhileWaiting) lapsedCreator = { hash: hashOf(token), at: Date.now() };
+    end(null, "lapsed");
+  }, WAIT_MS);
   broadcastStatus();
   return { status: 201, body: statusFor(token) };
 }

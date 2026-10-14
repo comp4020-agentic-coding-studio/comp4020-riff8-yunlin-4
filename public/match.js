@@ -191,7 +191,12 @@ function renderStatus() {
 function renderResult(s) {
   const r = s.result;
   const outcome = r.winner === null ? "No one took the field." : r.youWon ? "You won." : "You lost.";
-  const nodes = [el("p", { className: "match-result" }, `${outcome} The match ended because ${REASONS[r.reason] ?? r.reason}, after ${clock(r.ticks)}.`)];
+  const SENTENCES = {
+    yielded: "The match against the computer yielded the scroll to someone else who wanted to play.",
+    lapsed: "Nobody took the second seat in time.",
+  };
+  const text = SENTENCES[r.reason] ?? `${outcome} The match ended because ${REASONS[r.reason] ?? r.reason}, after ${clock(r.ticks)}.`;
+  const nodes = [el("p", { className: "match-result" }, text)];
   if (r.chronicle) nodes.push(el("blockquote", { className: "match-chronicle" }, r.chronicle));
   const sealed = el("p", {}, "Sealed onto the scroll. ", el("a", { href: "/" }, "See it there"));
   if (r.chronicleSealed || sealedFor === s.matchId) {

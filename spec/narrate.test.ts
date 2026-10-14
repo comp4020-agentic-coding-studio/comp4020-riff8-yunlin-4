@@ -62,6 +62,14 @@ it("shows game time, tags sides, and says what was tried", () => {
   );
 });
 
+it("narrates the yielded and lapsed ends", () => {
+  const mem = newMemory();
+  expect(narrateLine(j({ event: "match.end", match: 3, ticks: 2400, winner: null, winnerSeat: null, reason: "yielded" }), mem)).toContain(
+    "yielded the scroll to another visitor after ten minutes against the bot",
+  );
+  expect(narrateLine(j({ event: "match.end", match: 4, ticks: 0, winner: null, winnerSeat: null, reason: "lapsed" }), mem)).toContain("lapsed: nobody took the second seat");
+});
+
 it("handles Fly prefixes, pass-through and quiet", () => {
   const mem = newMemory();
   const req = j({ event: "request", who: "鑑·3fa9c2", method: "GET", route: "GET /", status: 200, ms: 3 });

@@ -64,7 +64,8 @@ function say(s: any): string[] {
   out.push(`match: ${s.status}${s.matchId ? ` #${s.matchId} on ${s.mapId}${s.seed !== undefined ? ` · seed ${s.seed}` : ""}` : ""} · ${seats}${open}${s.manualTicks ? " · manual ticks (use: step N)" : ""}`);
   if (s.result) {
     const r = s.result;
-    out.push(`result: ${r.winner === null ? "no winner" : `${seatName(r.winner)} won`} by ${r.reason} after ${r.ticks} ticks · you ${r.youWon ? "won" : "did not win"}`);
+    const how = r.reason === "yielded" ? "yielded to another visitor after ten minutes against the bot" : r.reason === "lapsed" ? "lapsed: nobody took the second seat" : `by ${r.reason} after ${r.ticks} ticks`;
+    out.push(`result: ${r.winner === null ? "no winner" : `${seatName(r.winner)} won`} ${how} · you ${r.youWon ? "won" : "did not win"}`);
     out.push(`chronicle${r.chronicleSealed ? " (sealed)" : " (not yet sealed; seal-chronicle)"}:`, r.chronicle);
   }
   return out;

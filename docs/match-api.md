@@ -21,7 +21,7 @@ cookie. Refusals are `{ "error": <code>, "message": <plain words> }`.
   "you": 0 | 1 | null,
   "manualTicks": false,
   "view": SeatView | null,
-  "result": { "winner": 0 | 1 | null, "reason": "hall" | "forfeit" | "abandoned" | "restart" | "time" | "yielded", "ticks": 2400,
+  "result": { "winner": 0 | 1 | null, "reason": "hall" | "forfeit" | "abandoned" | "restart" | "time" | "yielded" | "lapsed", "ticks": 2400,
               "youWon": true, "chronicle": "…", "chronicleSealed": false } | null
 }
 ```
@@ -36,7 +36,11 @@ most recent finished match only to the two players who sat in it (others see
 ## Actions
 
 - `POST /api/match` `{}` → create the match and take seat 0. `201` + status.
-  `409 match-busy` if a match is waiting or playing, except that a match
+  `409 match-busy` if a match is waiting or playing (a waiting match nobody
+  joins lapses after three minutes, `MATCH_WAIT_MS`, reason `lapsed`, no
+  winner; the visitor whose match lapsed after someone else was refused
+  `match-busy` meanwhile gets `409 wait-your-turn` if they create again within
+  the next three minutes), except that a match
   against the bot that has run ten minutes (`MATCH_BOT_YIELD_MS`) ends with
   reason `yielded` when another visitor asks, and the new match is created.
 - `POST /api/match/join` `{}` → take seat 1. `200` + status. `409 match-full`,

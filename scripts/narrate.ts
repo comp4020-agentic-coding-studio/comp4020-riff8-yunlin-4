@@ -288,7 +288,9 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
       }
       const reason = str(e.reason) ?? "";
       let result: string;
-      if (e.winner === null || e.winner === undefined) result = "no winner";
+      if (reason === "yielded") result = "no winner: the match yielded the scroll to another visitor after ten minutes against the bot";
+      else if (reason === "lapsed") result = "lapsed: nobody took the second seat";
+      else if (e.winner === null || e.winner === undefined) result = "no winner";
       else {
         const by: Record<string, string> = {
           hall: "by taking the hall",
@@ -299,7 +301,7 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
         };
         result = `${tagged(e.winner, e.winnerSeat)} won ${by[reason] ?? `(${tidy(reason)})`}`;
       }
-      if (e.winner === null || e.winner === undefined) result += reason ? ` (${tidy(reason)})` : "";
+      if ((e.winner === null || e.winner === undefined) && reason !== "yielded" && reason !== "lapsed") result += reason ? ` (${tidy(reason)})` : "";
       return `match ${matchKey ?? "?"} ended${dur}: ${result}`;
     }
     case "chronicle.seal":
