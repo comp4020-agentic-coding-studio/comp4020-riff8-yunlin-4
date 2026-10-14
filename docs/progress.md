@@ -28,7 +28,7 @@ alone; this file does its job.
 - [x] Round 1 playtest: 6 major, 4 minor, 2 ideas (20:54)
 
 ### M2 — on the scroll (1:30–2:30)
-- [ ] Per-seat stream, `/match` page + `public/match.js`, seat/join, results, chronicle seal
+- [x] Per-seat stream, `/match` page + `public/match.js`, seat/join, results, chronicle seal (20:46)
 - [x] `spec/access.test.ts`, 210 cases, no table/code disagreement (20:55)
 - [x] Log file + rotation on `/data/logs` (20:09, with the logging slice)
 - [x] Triage round 1, fix blockers/majors (21:10)
@@ -37,6 +37,8 @@ alone; this file does its job.
 - [x] T-21 (F-34, F-35, major) raids between looks warn; regrove reach 24 (21:59)
 - [x] T-22 (F-36, F-38, major) idle spearmen defend their people nearby; plurals (22:03)
 - [x] T-23 (F-40, F-41, F-43, F-44, F-45) legend names hills, creatures announced, costs on buttons, early banner, no layout shift, game linked near the top — done when: screenshots
+- [x] T-24 (F-47) plurals, warnings in words, defend range stated (22:16)
+- [x] T-25 (F-50) hint stays until the first gather; selecting doesn't move the map (22:17)
 - [x] T-20 (F-32, major) an unjoined match lapses after three minutes — done when: spec with short env
 
 ### M3 — hold up (2:30–3:30)
@@ -47,7 +49,7 @@ alone; this file does its job.
 - [x] Round 3: four verifiers, a fresh newcomer and UX reviewer; 13 findings verified by fresh testers, 13 new (7 major) all fixed (22:08)
 
 ### Finish (3:30–4:00)
-- [ ] PROCESS.md, reflections/crit-10.md
+- [x] PROCESS.md, reflections/crit-10.md (22:03, numbers updated 22:20)
 - [ ] `pnpm check` against the final Docker image with `--tmpfs /data`; `pnpm check:evidence`
 - [ ] prompt.md deleted in the last commit
 

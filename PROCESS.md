@@ -436,10 +436,15 @@ caught both from `git status` and committed by path, one slice at a time.
 
 ### What the playtesters found
 
-Three rounds of blind testers, with a log-only reader and a code audit
-alongside: 46 findings, 4 blockers, 22 majors, 14 minors, 6 ideas
-(`docs/feedback.md`). Every accepted finding became a todo in
-`docs/progress.md`, and every bug fix got a spec. Three changed the game most.
+Three rounds of blind testers (17 testers in all), with two log-only
+readers and a code audit alongside, produced 51 findings: 4 blockers, 24
+majors, 18 minors and 5 ideas (`docs/feedback.md`). Every accepted finding
+became a todo in `docs/progress.md`, and every bug fix got a spec. A finding
+counted as verified only when a fresh tester, not the one who reported it,
+no longer reproduced it. 21 reached that bar, including all four blockers.
+The rest are fixed with a spec but weren't re-reached in play, mostly
+creature legibility, since few testers met a creature before the bot arrived.
+Three findings changed the game most.
 
 - **Matches were over in six minutes.** All three round 1 testers lost to
   the bot's first wave at about 4:30. Slowing the barracks and spearmen and
@@ -472,6 +477,13 @@ nothing can hand it back without the accounts the README rules out. Deferred:
 showing the pixiu's heading on first sighting (F-37), touch play (F-46), and
 an HMAC-signed seal so marks can't be brute-forced (F-25). Marks gate
 nothing, they only tell people apart.
+
+Round 3 was meant to verify fixes, and it found new problems, all of them
+in the gaps between two things that each worked alone. A raid that started
+and ended between two looks gave no warning. Idle spearmen stood twelve tiles
+from labourers being killed. A hint vanished after the wrong kind of order.
+I fixed all of them with specs, and a targeted re-test and a final newcomer
+confirmed the fixes.
 
 What the testers couldn't judge: whether it's fun for two people who know
 each other. Every tester played the bot alone, and the only two-human
