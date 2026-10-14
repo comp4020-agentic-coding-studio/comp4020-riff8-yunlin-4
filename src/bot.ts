@@ -175,28 +175,38 @@ export function createBot(opts: BotOptions = {}): (view: SeatView) => Command[] 
     const away = spears.filter((s) => hallDist(s) > BOT.homeRadius);
     const soldiersSeen = foes.filter((e) => e.kind === "spearman");
     const enemyHall = foes.find((e) => e.kind === "hall");
+    // the home guard: the spearmen nearest the hall never march
+    const guard = home
+      .slice()
+      .sort((a, b) => hallDist(a) - hallDist(b) || a.id - b.id)
+      .slice(0, BOT.homeGuard);
+    const field = home.filter((s) => !guard.includes(s));
+    // the hall is under attack: enemy soldiers at home, or anyone at its walls
+    const besieged = intruders.some((e) => e.kind === "spearman" || hallDist(e) <= BOT.wallRadius);
+    // a wave beating on a hall that's nearly down finishes the job instead
+    const finishing = (s: VisibleEntity) =>
+      !!enemyHall && enemyHall.hp * 3 < enemyHall.maxHp && cheb(s.x, s.y, enemyHall.x + 1, enemyHall.y + 1) <= 3;
 
-    if (intruders.some((e) => e.kind === "spearman") || (intruders.length > 0 && spears.length > 0)) {
-      // defend: everyone within reach of home goes for the nearest intruder
+    if (intruders.length > 0 && (besieged || spears.length > 0)) {
+      // defend: the nearest intruder (soldiers first); when the hall itself
+      // is under attack, every spearman comes home for it
       const soldiers = intruders.filter((e) => e.kind === "spearman");
       const pool = soldiers.length > 0 ? soldiers : intruders;
       const t = nearestTo(hx, hy, pool);
-      const guards = spears.filter((s) => s.task !== "attacking" || cheb(s.x, s.y, t.x, t.y) > 1);
-      if (t && guards.length > 0) sendAttack(guards.filter((s) => hallDist(s) <= BOT.defendRadius), t);
+      const reach = (s: VisibleEntity) => (besieged ? !finishing(s) : hallDist(s) <= BOT.defendRadius);
+      const guards = spears.filter((s) => reach(s) && (s.task !== "attacking" || cheb(s.x, s.y, t.x, t.y) > 1));
+      if (guards.length > 0) sendAttack(guards, t);
     } else if (away.length > 0 && away.length < BOT.regroupBelow && soldiersSeen.length >= away.length) {
       // regroup: the wave is nearly spent
       sendMove(away, rally.x, rally.y);
     } else {
-      const waveGo = away.length === 0 ? home.length >= attackAt : home.length >= Math.max(BOT.laterWaveAt, attackAt - 2);
-      const marchers = [...away, ...(waveGo ? home : [])];
-      // hold the home group at the rally point
-      if (!waveGo) {
-        const loose = home.filter((s) => s.task === "idle" && cheb(s.x, s.y, rally.x, rally.y) > 4);
-        if (loose.length > 0) sendMove(loose, rally.x, rally.y);
-      }
+      const waveGo = away.length === 0 ? field.length >= attackAt : field.length >= Math.max(BOT.laterWaveAt, attackAt - 2);
+      const marchers = [...away, ...(waveGo ? field : [])];
+      // hold the home group (and always the guard) at the rally point
+      const holding = waveGo ? guard : home;
+      const loose = holding.filter((s) => s.task === "idle" && cheb(s.x, s.y, rally.x, rally.y) > 4);
+      if (loose.length > 0) sendMove(loose, rally.x, rally.y);
       if (marchers.length > 0) {
-        const cx = Math.round(marchers.reduce((a, m) => a + m.x, 0) / marchers.length);
-        const cy = Math.round(marchers.reduce((a, m) => a + m.y, 0) / marchers.length);
         // retarget fighters only when a soldier is nearby; otherwise only idle ones need orders
         const prey = (m: VisibleEntity) => {
           const near = soldiersSeen.filter((e) => cheb(e.x, e.y, m.x, m.y) <= BOT.preyRadius);
@@ -215,24 +225,33 @@ export function createBot(opts: BotOptions = {}): (view: SeatView) => Command[] 
           const t = prey(m);
           if (t && (m.task !== "attacking" || soldiersSeen.some((e) => e.id === t.id))) {
             groups.set(t.id, [...(groups.get(t.id) ?? []), m]);
-          } else if (!t && m.task === "idle") walkers.push(m);
+          } else if (!t && m.task !== "attacking") walkers.push(m);
         }
         for (const [id, us] of groups) {
           const t = view.entities.find((e) => e.id === id)!;
           sendAttack(us, t);
         }
-        if (walkers.length > 0) {
-          // across the north ford, then on to where the enemy hall must be
-          const riverLo = 54;
-          const riverHi = 57;
-          const crossed = seat === 1 ? cx > riverHi : cx < riverLo;
-          const enemyX = seat === 1 ? W - 1 - 6 : 6;
-          if (crossed || (seat === 1 ? cx > 45 : cx < 66) === false) {
-            sendMove(walkers, enemyX, hy);
-          } else {
-            const farX = seat === 1 ? riverHi + 3 : riverLo - 3;
-            sendMove(walkers, farX, 10);
-          }
+        // the march: gather at the muster point on this bank of the north
+        // ford, cross together once nobody is straggling, then on to where
+        // the enemy hall must be
+        const riverLo = 54;
+        const riverHi = 57;
+        const across = (m: VisibleEntity) => (seat === 1 ? m.x > riverHi : m.x < riverLo);
+        const muster = { x: seat === 1 ? riverLo - BOT.musterDist : riverHi + BOT.musterDist, y: 10 };
+        const farBank = { x: seat === 1 ? riverHi + 3 : riverLo - 3, y: 10 };
+        const enemyX = seat === 1 ? W - 1 - 6 : 6;
+        const atMuster = (m: VisibleEntity) => cheb(m.x, m.y, muster.x, muster.y) <= BOT.musterRadius;
+        const behind = marchers.filter((m) => !across(m) && m.task !== "attacking");
+        const ready = behind.every(atMuster);
+        const idleW = walkers.filter((m) => m.task === "idle");
+        const over = idleW.filter(across);
+        if (over.length > 0) sendMove(over, enemyX, hy);
+        const here = idleW.filter((m) => !across(m));
+        if (ready) {
+          if (here.length > 0) sendMove(here, farBank.x, farBank.y);
+        } else {
+          const toMuster = here.filter((m) => !atMuster(m));
+          if (toMuster.length > 0) sendMove(toMuster, muster.x, muster.y);
         }
       }
     }

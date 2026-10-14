@@ -44,13 +44,14 @@ import {
   type SimState,
 } from "./state.ts";
 import type { Command, Seat, SimEvent, UnitKind } from "./types.ts";
-import { canPlace } from "./validate.ts";
+import { canPlace, ownUnfinished } from "./validate.ts";
 
 interface Ctx {
   state: SimState;
   events: SimEvent[];
   budget: number;
   vis: [Uint8Array, Uint8Array];
+  known: [Known, Known];
 }
 
 const G = "g".charCodeAt(0);
@@ -118,6 +119,34 @@ function retaliate(ctx: Ctx, target: Entity, by: Entity): void {
 
 // ---- movement ----
 
+// What a seat knows of the ground, for planning its units' routes: tiles in
+// view as they truly are; tiles out of view as it last saw them (never seen:
+// open plain), with no buildings. A route through fog therefore says nothing
+// about hidden enemy buildings; a real blocker is met when it comes into view
+// (blockedAhead), and the unit re-plans then. Its own buildings are always in
+// view (each sees its own footprint).
+interface Known {
+  vis: Uint8Array;
+  plan: (i: number) => boolean;
+}
+
+const OPEN = new Set(["p", "f", "l", "x"].map((c) => c.charCodeAt(0)));
+
+function knownFor(s: SimState, seat: Seat, vis: Uint8Array): Known {
+  const rev = s.revealed[seat];
+  return { vis, plan: (i) => (vis[i] ? walkable(s, i) : rev[i] === 0 || OPEN.has(rev[i])) };
+}
+
+// Whether the planned route, as far as it runs through tiles in view, now
+// crosses something the seat can see is in the way.
+function blockedAhead(path: number[], known: Known): boolean {
+  for (const i of path) {
+    if (!known.vis[i]) return false;
+    if (!known.plan(i)) return true;
+  }
+  return false;
+}
+
 type StepResult = "arrived" | "moving" | "stuck" | "wait";
 
 function stepToward(
@@ -128,6 +157,7 @@ function stepToward(
   speed: number,
   passable: (i: number) => boolean,
   repath: boolean,
+  known?: Known,
 ): StepResult {
   if (distToRect(e.x, e.y, goal.x, goal.y, goal.w, goal.h) <= goal.range) {
     e.path = [];
@@ -139,10 +169,11 @@ function stepToward(
     e.path.length === 0 ||
     e.pathKey !== key ||
     !passable(e.path[0]) ||
+    (known !== undefined && blockedAhead(e.path, known)) ||
     (repath && e.pathAge >= REPATH_TICKS);
   if (stale) {
     if (ctx.budget <= 0) return "wait";
-    const r = findPath(s.width, s.height, e.x, e.y, goal, passable, Math.min(PATH_MAX_NODES, ctx.budget));
+    const r = findPath(s.width, s.height, e.x, e.y, goal, known ? known.plan : passable, Math.min(PATH_MAX_NODES, ctx.budget));
     ctx.budget -= r.expanded;
     e.path = r.path;
     e.pathKey = key;
@@ -188,8 +219,8 @@ function qilinPeaceful(s: SimState): boolean {
 
 // The next grove tile to work: the given one if it has grain, else the
 // nearest with grain within REGROVE_RADIUS that this seat has seen as a grove,
-// else the nearest such within REGROVE_FAR_RADIUS that isn't inside the
-// nian's leash. -1 if there is none.
+// else the one with the shortest round trip within REGROVE_FAR_RADIUS of
+// it or of the hall that isn't inside the nian's leash. -1 if there is none.
 function groveFor(s: SimState, seat: Seat, tile: number): number {
   if (s.groveGrain[tile] > 0) return tile;
   const near = nearestGrove(s, seat, tile, REGROVE_RADIUS, false);
@@ -201,22 +232,38 @@ function inNianLeash(s: SimState, x: number, y: number): boolean {
   return distToRect(x, y, dx0, dy0, 2, 3) <= NIAN.leash;
 }
 
-function nearestGrove(s: SimState, seat: Seat, tile: number, radius: number, avoidNian: boolean): number {
+function nearestGrove(s: SimState, seat: Seat, tile: number, radius: number, far: boolean): number {
   const tx = tile % s.width;
   const ty = Math.floor(tile / s.width);
+  // the hall's centre, where it was raised (a fallen hall ends the match)
+  const [hx0, hy0] = getMap(s).halls[seat];
+  const hx = hx0 + 1;
+  const hy = hy0 + 1;
   let best = -1;
-  let bestD = Infinity;
-  for (let y = Math.max(0, ty - radius); y <= Math.min(s.height - 1, ty + radius); y++) {
-    for (let x = Math.max(0, tx - radius); x <= Math.min(s.width - 1, tx + radius); x++) {
+  let bestKey: number[] = [];
+  // the near search only needs its own box; the far one scans the map
+  const [y0, y1, x0, x1] = far
+    ? [0, s.height - 1, 0, s.width - 1]
+    : [Math.max(0, ty - radius), Math.min(s.height - 1, ty + radius), Math.max(0, tx - radius), Math.min(s.width - 1, tx + radius)];
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const near = Math.max(Math.abs(x - tx), Math.abs(y - ty));
+      const home = Math.max(Math.abs(x - hx), Math.abs(y - hy));
+      // the far search also looks around the hall, so a dry grove at the
+      // edge of the home ground doesn't strand its labourers
+      if (near > radius && !(far && home <= radius)) continue;
       const i = y * s.width + x;
       if (s.groveGrain[i] <= 0 || s.revealed[seat][i] !== G) continue;
-      if (avoidNian && inNianLeash(s, x, y)) continue;
-      // ties go nearer home, then north, then towards the river: the same
-      // choice both seats would make on their mirrored halves
-      const inland = seat === 0 ? s.width - 1 - x : x;
-      const d = Math.max(Math.abs(x - tx), Math.abs(y - ty)) * s.width * s.height + y * s.width + (s.width - 1 - inland);
-      if (d < bestD) {
-        bestD = d;
+      if (far && inNianLeash(s, x, y)) continue;
+      // nearest first (the far search: shortest round trip, there and back
+      // to the hall); ties go nearer home, then north, then towards the
+      // seat's own edge: the same choice both seats would make on their
+      // mirrored halves, and never drifting riverward, towards the enemy,
+      // when a grove as good lies homeward
+      const edge = seat === 0 ? s.width - 1 - x : x;
+      const key = far ? [near + home, home, y, edge] : [near, home, y, edge];
+      if (best < 0 || less(key, bestKey)) {
+        bestKey = key;
         best = i;
       }
     }
@@ -224,7 +271,21 @@ function nearestGrove(s: SimState, seat: Seat, tile: number, radius: number, avo
   return best;
 }
 
-function attackStep(ctx: Ctx, e: Entity, target: Entity, damage: number, attackTicks: number, speed: number, passable: (i: number) => boolean): StepResult {
+function less(a: number[], b: number[]): boolean {
+  for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) return a[k] < b[k];
+  return false;
+}
+
+function attackStep(
+  ctx: Ctx,
+  e: Entity,
+  target: Entity,
+  damage: number,
+  attackTicks: number,
+  speed: number,
+  passable: (i: number) => boolean,
+  known?: Known,
+): StepResult {
   if (dist(e, target) <= 1) {
     e.path = [];
     if (e.attackCd === 0) {
@@ -233,7 +294,7 @@ function attackStep(ctx: Ctx, e: Entity, target: Entity, damage: number, attackT
     }
     return "arrived";
   }
-  return stepToward(ctx, e, rectGoal(target, 1), `a${target.id}`, speed, passable, true);
+  return stepToward(ctx, e, rectGoal(target, 1), `a${target.id}`, speed, passable, true, known);
 }
 
 // The nearest enemy this unit's seat can see within ACQUIRE_RADIUS: the other
@@ -268,6 +329,7 @@ function unitTick(ctx: Ctx, e: Entity): void {
   const seat = e.side as Seat;
   const stats = UNITS[e.kind as UnitKind];
   const walk = (i: number) => walkable(s, i);
+  const known = ctx.known[seat];
 
   if (e.order === null && e.kind === "spearman") {
     const t = acquire(ctx, e, seat);
@@ -281,7 +343,7 @@ function unitTick(ctx: Ctx, e: Entity): void {
   switch (o.type) {
     case "move": {
       e.task = "moving";
-      const r = stepToward(ctx, e, tileGoal(o.x, o.y, 0), `m${o.x},${o.y}`, stats.speed, walk, false);
+      const r = stepToward(ctx, e, tileGoal(o.x, o.y, 0), `m${o.x},${o.y}`, stats.speed, walk, false, known);
       if (r === "arrived" || r === "stuck") setIdle(e);
       return;
     }
@@ -300,7 +362,7 @@ function unitTick(ctx: Ctx, e: Entity): void {
         t = next;
       }
       e.task = "attacking";
-      const r = attackStep(ctx, e, t, stats.damage, stats.attackTicks, stats.speed, walk);
+      const r = attackStep(ctx, e, t, stats.damage, stats.attackTicks, stats.speed, walk, known);
       if (r === "stuck") setIdle(e);
       return;
     }
@@ -311,7 +373,7 @@ function unitTick(ctx: Ctx, e: Entity): void {
         return;
       }
       e.task = "building";
-      const r = stepToward(ctx, e, rectGoal(b, 1), `b${b.id}`, stats.speed, walk, false);
+      const r = stepToward(ctx, e, rectGoal(b, 1), `b${b.id}`, stats.speed, walk, false, known);
       if (r === "stuck") setIdle(e);
       if (r !== "arrived") return;
       const bs = BUILDINGS[b.kind as "barracks"];
@@ -333,7 +395,7 @@ function unitTick(ctx: Ctx, e: Entity): void {
           return;
         }
         e.task = "carrying";
-        const r = stepToward(ctx, e, rectGoal(hall, 1), `h${hall.id}`, stats.speed, walk, false);
+        const r = stepToward(ctx, e, rectGoal(hall, 1), `h${hall.id}`, stats.speed, walk, false, known);
         if (r === "stuck") setIdle(e);
         if (r === "arrived") {
           s.grain[seat] += e.carrying;
@@ -348,7 +410,7 @@ function unitTick(ctx: Ctx, e: Entity): void {
       o.tile = tile;
       const gx = tile % s.width;
       const gy = Math.floor(tile / s.width);
-      const r = stepToward(ctx, e, tileGoal(gx, gy, 1), `g${tile}`, stats.speed, walk, false);
+      const r = stepToward(ctx, e, tileGoal(gx, gy, 1), `g${tile}`, stats.speed, walk, false, known);
       if (r === "stuck") setIdle(e);
       if (r !== "arrived") {
         e.task = "gathering";
@@ -642,7 +704,13 @@ function apply(ctx: Ctx, seat: Seat, c: Command): void {
     }
     case "build": {
       const builders = units.filter((e) => e.kind === "labourer");
-      if (builders.length === 0 || s.grain[seat] < BUILDINGS.barracks.cost) return;
+      if (builders.length === 0) return;
+      const half = ownUnfinished(s, seat, c.x, c.y);
+      if (half) {
+        for (const e of builders) order(e, { type: "build", target: half.id });
+        return;
+      }
+      if (s.grain[seat] < BUILDINGS.barracks.cost) return;
       if (!canPlace(s, seat, "barracks", c.x, c.y, ctx.vis[seat])) return;
       s.grain[seat] -= BUILDINGS.barracks.cost;
       const b = newBuilding(s, "barracks", seat, c.x, c.y, false);
@@ -658,11 +726,13 @@ function apply(ctx: Ctx, seat: Seat, c: Command): void {
 export function step(state: SimState, commands: { seat: Seat; command: Command }[]): SimEvent[] {
   if (state.winner !== null) return [];
   state.tick++;
+  const vis: [Uint8Array, Uint8Array] = [visibleTiles(state, 0), visibleTiles(state, 1)];
   const ctx: Ctx = {
     state,
     events: [],
     budget: PATH_BUDGET,
-    vis: [visibleTiles(state, 0), visibleTiles(state, 1)],
+    vis,
+    known: [knownFor(state, 0, vis[0]), knownFor(state, 1, vis[1])],
   };
   for (const { seat, command } of commands) apply(ctx, seat, command);
 

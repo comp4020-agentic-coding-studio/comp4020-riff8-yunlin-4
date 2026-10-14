@@ -10,6 +10,7 @@ import type { Command, Rejection, Seat, Validated } from "./types.ts";
 
 export const NOT_YOURS = "no such unit of yours";
 export const NOT_IN_VIEW = "no such target in view";
+export const UNFINISHED = "that barracks isn't finished yet: send labourers to build on it";
 
 const KEYS: Record<Command["type"], string[]> = {
   move: ["type", "units", "x", "y"],
@@ -85,6 +86,16 @@ export function placeProblem(state: SimState, seat: Seat, kind: "barracks", x: n
   return null;
 }
 
+// The seat's own unfinished barracks standing on x,y (any tile of its
+// footprint), if any: a build there resumes it. Only ever the seat's own
+// building, which it always sees, so this reveals nothing.
+export function ownUnfinished(state: SimState, seat: Seat, x: number, y: number): Entity | undefined {
+  if (x < 0 || y < 0 || x >= state.width || y >= state.height) return undefined;
+  const id = state.occ[y * state.width + x];
+  const b = id ? findEntity(state, id) : undefined;
+  return b && b.side === seat && b.kind === "barracks" && !b.complete ? b : undefined;
+}
+
 export function canPlace(state: SimState, seat: Seat, kind: "barracks", x: number, y: number, vis?: Uint8Array): boolean {
   return placeProblem(state, seat, kind, x, y, vis) === null;
 }
@@ -105,7 +116,7 @@ function check(state: SimState, seat: Seat, raw: unknown): Command {
     if (!b || b.side !== seat) fail("not-yours", NOT_YOURS);
     if (!isBuilding(b.kind)) fail("invalid", "only a building trains");
     const unit = o.unit;
-    if (!b.complete) fail("invalid", "still being built");
+    if (!b.complete) fail("invalid", UNFINISHED);
     if (UNITS[unit].trainedAt !== b.kind) fail("invalid", `a ${b.kind} can't train that`);
     if (b.queue.length >= MAX_QUEUE) fail("invalid", "queue full");
     if (state.grain[seat] < UNITS[unit].cost) fail("grain", "not enough grain");
@@ -138,6 +149,8 @@ function check(state: SimState, seat: Seat, raw: unknown): Command {
       if (o.building !== "barracks") fail("malformed", "unknown building kind");
       const [x, y] = coord(state, o);
       if (!mine.every((e) => e.kind === "labourer")) fail("invalid", "only labourers build");
+      // resuming a half-built barracks of one's own: no cost, no placement check
+      if (ownUnfinished(state, seat, x, y)) return { type: "build", units: ids, building: "barracks", x, y };
       const problem = placeProblem(state, seat, "barracks", x, y);
       if (problem) fail("invalid", problem);
       if (state.grain[seat] < BUILDINGS.barracks.cost) fail("grain", "not enough grain");
@@ -145,8 +158,11 @@ function check(state: SimState, seat: Seat, raw: unknown): Command {
     }
     case "attack": {
       if (!isId(o.target)) fail("malformed", "target must be an id");
+      // the view is computed whether or not the id exists, so a hidden
+      // target costs the same work as a nonexistent one
+      const vis = visibleTiles(state, seat);
       const target = findEntity(state, o.target);
-      if (!target || !seenBy(state, visibleTiles(state, seat), seat, target)) fail("invalid", NOT_IN_VIEW);
+      if (!target || !seenBy(state, vis, seat, target)) fail("invalid", NOT_IN_VIEW);
       if (target.side === seat) fail("invalid", "that is yours");
       return { type: "attack", units: ids, target: target.id };
     }

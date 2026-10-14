@@ -60,7 +60,10 @@ export interface SimState {
   winner: Seat | null;
   width: number;
   height: number;
-  nextId: number;
+  // per-owner id sequences (seat 0, seat 1, wild): the k-th piece of owner o
+  // gets id 3k+o+1, so one side's creations never shift another's ids and a
+  // seat can't count fogged enemy production from gaps in its own
+  seq: [number, number, number];
   entities: Entity[]; // ascending id
   grain: [number, number];
   groveGrain: number[]; // per tile
@@ -74,6 +77,25 @@ export interface SimState {
 
 export function getMap(state: SimState): MapDef {
   return MAPS[state.mapId];
+}
+
+function nextId(state: SimState, side: Side): number {
+  const o = side === "wild" ? 2 : side;
+  return 3 * state.seq[o]++ + o + 1;
+}
+
+// Keeps entities in ascending id order (findEntity's binary search, and the
+// tick's id-order processing, depend on it).
+function insert(state: SimState, e: Entity): void {
+  const es = state.entities;
+  let lo = 0;
+  let hi = es.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (es[mid].id < e.id) lo = mid + 1;
+    else hi = mid;
+  }
+  es.splice(lo, 0, e);
 }
 
 function blank(id: number, kind: Kind, side: Side, x: number, y: number, hp: number, size: number): Entity {
@@ -113,26 +135,26 @@ function blank(id: number, kind: Kind, side: Side, x: number, y: number, hp: num
 }
 
 export function newUnit(state: SimState, kind: UnitKind, side: Seat, x: number, y: number): Entity {
-  const e = blank(state.nextId++, kind, side, x, y, UNITS[kind].hp, 1);
-  state.entities.push(e);
+  const e = blank(nextId(state, side), kind, side, x, y, UNITS[kind].hp, 1);
+  insert(state, e);
   return e;
 }
 
 export function newBuilding(state: SimState, kind: BuildingKind, side: Seat, x: number, y: number, complete: boolean): Entity {
   const b = BUILDINGS[kind];
-  const e = blank(state.nextId++, kind, side, x, y, b.hp, b.size);
+  const e = blank(nextId(state, side), kind, side, x, y, b.hp, b.size);
   e.complete = complete;
   if (!complete) e.hp = Math.max(1, Math.floor(b.hp / 10));
   e.task = complete ? "idle" : "building";
-  state.entities.push(e);
+  insert(state, e);
   for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) state.occ[(y + dy) * state.width + x + dx] = e.id;
   return e;
 }
 
 function newCreature(state: SimState, kind: CreatureKind, x: number, y: number, hp: number): Entity {
-  const e = blank(state.nextId++, kind, "wild", x, y, hp, 1);
+  const e = blank(nextId(state, "wild"), kind, "wild", x, y, hp, 1);
   e.task = kind === "nian" ? "asleep" : kind === "pixiu" ? "patrolling" : "idle";
-  state.entities.push(e);
+  insert(state, e);
   return e;
 }
 
@@ -147,7 +169,7 @@ export function createMatch(mapId: string, seed: number): SimState {
     winner: null,
     width: def.width,
     height: def.height,
-    nextId: 1,
+    seq: [0, 0, 0],
     entities: [],
     grain: [START_GRAIN, START_GRAIN],
     groveGrain: def.grove.slice(),

@@ -108,4 +108,8 @@ export const BOT = {
   defendRadius: 24, // spearmen this close come back to defend
   rallyDist: 8, // the rally point, this far inland of the hall
   preyRadius: 7, // marchers turn on enemy spearmen this close
+  homeGuard: 3, // spearmen nearest the hall that never march
+  wallRadius: 4, // an enemy this close to the hall's centre is attacking it: the whole army comes home
+  musterDist: 5, // a wave gathers this far back from the river at the north ford before crossing
+  musterRadius: 4, // and crosses once every marcher still on this bank is this close to the muster point
 };

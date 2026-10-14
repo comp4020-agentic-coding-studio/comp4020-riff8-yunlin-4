@@ -4,7 +4,7 @@
 // seat only viewFor(state, seat).
 
 export { createMatch, type SimState, type Entity } from "./state.ts";
-export { validateCommand, NOT_YOURS, NOT_IN_VIEW } from "./validate.ts";
+export { validateCommand, NOT_YOURS, NOT_IN_VIEW, UNFINISHED } from "./validate.ts";
 export { step } from "./step.ts";
 export { viewFor, visibleIds, ownerOf, summary } from "./view.ts";
 export { MAP_IDS, MAPS, mapText } from "./map.ts";

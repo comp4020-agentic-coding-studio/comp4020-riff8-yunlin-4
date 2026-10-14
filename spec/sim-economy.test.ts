@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BUILDINGS, createMatch, POP_CAP, step, UNITS, validateCommand, type SimEvent, type SimState } from "../src/sim/index.ts";
+import { BUILDINGS, createMatch, POP_CAP, step, UNFINISHED, UNITS, validateCommand, type SimEvent, type SimState } from "../src/sim/index.ts";
 import { MAPS } from "../src/sim/map.ts";
 import { command, place, run } from "../src/sim/testing.ts";
 
@@ -133,6 +133,59 @@ describe("economy", () => {
     // mirror-exact, so the two sides land close, not equal
     expect(labs(0).length).toBeGreaterThan(30);
     expect(Math.abs(labs(0).length - labs(1).length)).toBeLessThanOrEqual(3);
+  });
+});
+
+describe("a half-built barracks", () => {
+  // round 2's blocker: labourers called away from a barracks could never finish it
+  function halfBuilt() {
+    const s = createMatch("scroll-1", 1);
+    const labs = s.entities.filter((e) => e.side === 0 && e.kind === "labourer").map((e) => e.id);
+    const ev = command(s, 0, { type: "build", units: labs, building: "barracks", x: 99, y: 14 }, 59);
+    const bid = (ev.find((e) => e.type === "build.start") as { building: number }).building;
+    command(s, 0, { type: "gather", units: labs, x: 108, y: 9 }, 40);
+    const b = s.entities.find((e) => e.id === bid)!;
+    return { s, labs, b };
+  }
+
+  it("is resumed, at no cost, by labourers sent to build on the same spot", () => {
+    const { s, labs, b } = halfBuilt();
+    expect(b.complete).toBe(false);
+    const work = b.work;
+    run(s, 100);
+    expect(b.work).toBe(work); // abandoned, it waits
+    expect(validateCommand(s, 0, { type: "train", building: b.id, unit: "spearman" })).toEqual({ ok: false, reason: "invalid", detail: UNFINISHED });
+    s.grain[0] = 0; // resuming costs nothing
+    const ev = command(s, 0, { type: "build", units: labs.slice(0, 2), building: "barracks", x: 99, y: 14 }, BUILDINGS.barracks.buildTicks);
+    expect(ev.filter((e) => e.type === "build.start")).toEqual([]);
+    expect(ev).toContainEqual(expect.objectContaining({ type: "build.done", building: b.id }));
+    expect(b.complete).toBe(true);
+    expect(s.grain[0]).toBeGreaterThanOrEqual(0);
+    expect(s.entities.filter((e) => e.kind === "barracks")).toHaveLength(1);
+  });
+
+  it("is resumed by a build naming any tile of its footprint", () => {
+    for (const [x, y] of [[99, 14], [100, 14], [99, 15], [100, 15]]) {
+      const { s, labs, b } = halfBuilt();
+      expect(validateCommand(s, 0, { type: "build", units: [labs[0]], building: "barracks", x, y })).toMatchObject({ ok: true });
+      command(s, 0, { type: "build", units: [labs[0]], building: "barracks", x, y }, 20);
+      expect(s.entities.find((e) => e.id === labs[0])!.task).toBe("building");
+      expect(s.entities.filter((e) => e.kind === "barracks")).toEqual([b]);
+    }
+  });
+
+  it("is only ever the seat's own: the other seat's half-built barracks is just in the way", () => {
+    const { s, b } = halfBuilt();
+    const theirs = s.entities.filter((e) => e.side === 1 && e.kind === "labourer").map((e) => e.id);
+    const scout = theirs[0];
+    const u = s.entities.find((e) => e.id === scout)!;
+    u.x = 97;
+    u.y = 14;
+    s.grain[1] = 1000;
+    expect(validateCommand(s, 1, { type: "build", units: [scout], building: "barracks", x: b.x, y: b.y })).toMatchObject({
+      ok: false,
+      detail: expect.stringMatching(/building is in the way/),
+    });
   });
 });
 
