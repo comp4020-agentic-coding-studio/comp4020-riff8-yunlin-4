@@ -392,3 +392,112 @@ suite.
 - Known edge: the same visitor in two tabs sees their own draft in the
   second tab as a stranger's until it's sealed, since ownership is never sent
   over the live channel.
+
+## Crit 10: 山海, a game on a second scroll, read back from the logs
+
+One unattended pod run (Opus 5.5 as orchestrator), against a brief a pod
+wrote at crit 9: add a two-player real-time strategy game to Colophon, played
+on a map that is itself a handscroll, and make the server's log good enough
+that a stranger can narrate a match from it alone. The crit's own bar, "two
+people your app tells apart, read from its logs", was the part I treated as
+non-negotiable; the game was how the pod chose to make that bar interesting.
+
+### Decisions first
+
+The README's argument changed before any code ([`e45a5a8`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/e45a5a8)): why a contest
+belongs on this scroll (gatherings round a scroll were also arguments; a
+match leaves a trace only if a player seals its chronicle), the four
+creatures each with one rule and one source I actually read, and an honest
+paragraph on what the log records about people. ADR 0002 picked the
+anonymous seal plus rate limits over more identity, since accounts fight the
+README's first decision and would put names into a log that outlives the
+crit. It made fog of war part of access control, and enemy ids answered
+exactly like nonexistent ones. ADR 0003 fixed one global match slot, a 4 Hz
+authoritative tick, commands applied next tick seat 0 then seat 1, and an
+in-flight match abandoned and logged on restart rather than replayed. I
+pinned the shared contract too, in `src/sim/types.ts` ([`6964082`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/6964082)) and
+`docs/match-api.md` ([`6d28106`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/6d28106)), so agents could build in parallel
+without colliding.
+
+### Orchestration
+
+I wrote docs and glue and committed; subagents wrote the code, each with its
+own files. Opus took the simulation ([`e2aad04`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/e2aad04)), the match server
+([`def7492`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/def7492)), the board ([`50a78cf`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/50a78cf)), the blind code audit and the
+security fixes. Sonnet took marks and logging ([`6a7cb47`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/6a7cb47)), the narrator
+([`e0895a4`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/e0895a4)), the bot ([`7ea0395`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/7ea0395)), the text client ([`9a6a9ba`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/9a6a9ba)),
+the access matrix ([`6387a2c`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/6387a2c)) and most fixes. No agent failed or hung.
+The cost was waiting: the sim took 40 minutes against a brief that hoped for
+25. I spent that time on the README, ADRs, `docs/logs.md` and the board, which
+only needed the contract. Twice an agent touched a file another agent held.
+The client fixer added a status field to `spec/access.test.ts`, and the sim
+fixer stashed and unstashed while another agent's edits sat uncommitted. I
+caught both from `git status` and committed by path, one slice at a time.
+
+### What the playtesters found
+
+Three rounds of blind testers, with a log-only reader and a code audit
+alongside: 46 findings, 4 blockers, 22 majors, 14 minors, 6 ideas
+(`docs/feedback.md`). Every accepted finding became a todo in
+`docs/progress.md`, and every bug fix got a spec. Three changed the game most.
+
+- **Matches were over in six minutes.** All three round 1 testers lost to
+  the bot's first wave at about 4:30. Slowing the barracks and spearmen and
+  doubling the hall's hp ([`4bbf1c8`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/4bbf1c8)) put human matches at 8 to 11
+  minutes, and bot against bot at 11 to 14.
+- **The fog leaked through ids.** The blind audit and, independently, the
+  adversarial tester saw that one global id counter let a seat count the
+  enemy's hidden production from gaps in its own ids. The audit also found
+  routes planned on the true map, which made detours reveal hidden
+  buildings. Per-side id sequences and paths planned on what a seat knows
+  ([`c340a9f`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/c340a9f)) closed both, and ADR 0002 now says what the fog hides
+  besides pieces ([`db172e4`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/db172e4)).
+- **Any seated visitor could crash the server.** A match stream ended at
+  its lifetime stayed in the broadcast set, and the next frame was written
+  after the end, an unhandled error that killed the process for everyone. The
+  auditor reproduced it 3 times out of 3, and the fix went in with a spec and
+  a harness rule ([`52b4598`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/52b4598)).
+
+The log-only reader followed a match but couldn't tell "gave 2 train orders
+to 0 units" from a failure, or wall-clock time from game time. The lines and
+the narrator were fixed for that ([`f645568`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/f645568)). Then `e2e/match.e2e.ts`
+plays the crit scenario in two Chrome profiles and asserts that the narrated
+log names each person for each act and holds no token, address or User-Agent
+([`0db4778`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-yunlin-4/commit/0db4778)).
+
+Rejected majors or blockers, for a human to review: none. Finding F-28 (a
+newcomer locked out of their own match after their browser session reset)
+was accepted as a legibility fix, not a seat restore. A seat is a seal, and
+nothing can hand it back without the accounts the README rules out. Deferred:
+showing the pixiu's heading on first sighting (F-37), touch play (F-46), and
+an HMAC-signed seal so marks can't be brute-forced (F-25). Marks gate
+nothing, they only tell people apart.
+
+What the testers couldn't judge: whether it's fun for two people who know
+each other. Every tester played the bot alone, and the only two-human
+matches were the e2e script and the access spec.
+
+### Cut, untested, and for a human to review
+
+- Nothing from the cut list was cut. The stretch (a brushed chronicle of the
+  revealed map) wasn't attempted. In-flight replay on restart was decided
+  against in ADR 0003 (logged abandon) before any code existed, not cut for
+  time.
+- Not pushed or deployed from this run: the clone has no remote, pod runs
+  leave pushing to the harness and deploying to CI, and `flyctl` was not
+  used. The brief's live check (a bot match on the live app, a few commands,
+  a forfeit, the session read from `flyctl logs` as a mark with no token) was
+  done against the Docker image CI builds, with `--tmpfs /data`. There
+  `pnpm check` passed, memory stayed at 55 MiB through a live bot match, the
+  log file was written to `/data/logs`, and the visitor's token appeared zero
+  times in the log. On the real app it's untested, and so are Fly's log
+  retention, a log flood on the real volume and a full match on the real
+  machine.
+- For review: what is logged about people (marks, acts, refusals naming
+  both parties; no address, User-Agent, text or token); the flood policy (a
+  50-a-second token bucket, 4 × 4 MiB rotation); fog as the access-control
+  decision; the single global slot, with an unjoined match lapsing after
+  three minutes and a bot match yielding after ten.
+- `spec/match-robustness` drives a stalled reader through python3, because a
+  Node socket can't shrink its receive buffer. CI's Ubuntu runner has
+  python3.
