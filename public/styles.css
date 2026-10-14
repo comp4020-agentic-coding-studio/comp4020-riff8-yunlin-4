@@ -395,3 +395,146 @@ footer {
     height: min(60vh, 28rem);
   }
 }
+
+/* 山海 match */
+
+/* The match page is wider than the scroll's text column, so the long map has
+   room; the map itself scrolls inside its own frame, right to left like the
+   painting, and the page never does. */
+.match-body {
+  max-width: 64rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.match-status p {
+  margin: 0 0 0.6rem;
+}
+
+.match-status button {
+  margin: 0 0.6rem 0.6rem 0;
+}
+
+.match-note:empty {
+  display: none;
+}
+
+.match-note,
+.match-hint {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.match-result {
+  font-size: 1.1rem;
+}
+
+.match-chronicle {
+  margin: 0 0 0.8rem;
+  padding-left: 1rem;
+  border-left: 3px solid var(--ink-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.match-board {
+  min-width: 0;
+  margin: 1rem 0;
+}
+
+.match-hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1.2rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--rule);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-hud-label {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.match-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0 0.6rem;
+}
+
+.match-controls button {
+  font-size: 0.9rem;
+  padding: 0.3rem 0.7rem;
+}
+
+.match-controls button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.match-controls .match-forfeit {
+  margin-inline-start: auto;
+  border-color: var(--ink-soft);
+}
+
+.match-scroller {
+  direction: rtl;
+  overflow: auto;
+  max-width: 100%;
+  max-height: min(70vh, 40rem);
+  border: 1px solid var(--rule);
+  background: #ece4d3;
+}
+
+/* Unpainted silk: the canvas is transparent where no one has looked, and a
+   faint weave shows through. */
+.match-canvas {
+  display: block;
+  background:
+    repeating-linear-gradient(90deg, rgb(43 39 33 / 3%) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(0deg, rgb(43 39 33 / 2.5%) 0 1px, transparent 1px 5px);
+  direction: ltr;
+  cursor: default;
+  touch-action: pan-x pan-y;
+}
+
+.match-canvas--aiming {
+  cursor: crosshair;
+}
+
+.match-log {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.match-log li:last-child {
+  color: var(--ink);
+}
+
+.match-rules {
+  margin: 1.5rem 0;
+}
+
+.match-rules summary {
+  cursor: pointer;
+}
+
+.match-rules-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-top: 0.6rem;
+}
