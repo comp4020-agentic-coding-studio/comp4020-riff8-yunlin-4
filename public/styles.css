@@ -529,6 +529,8 @@ footer {
   align-items: center;
   gap: 0.4rem;
   padding: 0.3rem 0 0.6rem;
+  /* room for the widest set of buttons, so selecting doesn't move the map */
+  min-height: 2.9rem;
 }
 
 .match-controls button {

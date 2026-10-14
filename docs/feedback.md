@@ -197,7 +197,7 @@ Triage: accepted → T-10.
 Surplus grain at the pop cap has nothing to buy. Deferred: one resource, one
 soldier type is the brief's scope.
 
-### F-28 [fixed] blocker · round 2 · newcomer · seats
+### F-28 [verified] blocker · round 2 · newcomer · seats
 What: the browser page went blank mid-match (the testing tool, most likely),
 and on return with a new seal the newcomer saw only "A match is under way",
 locked out of their own match with no explanation.
@@ -302,7 +302,7 @@ Round 3 newcomer (fresh, browser), verifying F-29 and F-30:
 - F-36's raid-death warning reached the log at 6:49 but the banner only at
   7:09 (F-44).
 
-### F-43 [fixed] major · round 3 · newcomer3 · front page
+### F-43 [verified] major · round 3 · newcomer3 · front page
 The game's link sits below a very tall painting; a cold visitor might never
 scroll to it. Triage: accepted → T-23 (one quiet line near the top).
 
@@ -353,3 +353,17 @@ spearmen now defend within twelve tiles on their own.
 ### F-49 minor · round 3 · v4 · pixiu
 The pixiu read "heading nowhere (still)" for 24 ticks: it stands its ground
 while fighting. Deferred with F-37.
+
+Final newcomer (fresh, browser):
+- F-43 [verified]: the game's link was on the first screen.
+- F-28 [verified]: a new session was told why the running match wasn't
+  theirs and that the seat forfeits after five minutes.
+- F-21/F-40 [verified in part]: own pieces, groves and hills told apart with
+  the legend; no enemy or creature reached in 2:42, so those stay with the
+  round 3 UX check.
+
+### F-50 [fixed] major · round 3 · newcomer4 · onboarding
+The first-steps hint vanished after a move order, though it teaches
+gathering, so labourers sat idle; selecting also moved the map ~20px.
+Triage: accepted → T-25: only a gather order retires the hint; the controls
+row keeps its height. Checked in a browser (canvas top 132 → 132).

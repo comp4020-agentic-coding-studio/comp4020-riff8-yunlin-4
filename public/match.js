@@ -824,7 +824,8 @@ function ids(pieces) {
 
 async function command(cmd) {
   const { ok, data } = await post("/api/match/command", cmd);
-  if (ok) {
+  // The first-steps hint teaches gathering, so only a gather order retires it.
+  if (ok && cmd.type === "gather") {
     ordered = true;
     firstEl.classList.add("match-first--off");
   }
