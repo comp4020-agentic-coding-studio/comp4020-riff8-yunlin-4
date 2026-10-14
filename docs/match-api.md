@@ -64,3 +64,30 @@ most recent finished match only to the two players who sat in it (others see
   time. Sent with the tick's view.
 - Heartbeat comment every 20 s. No seal token, mark or player text is ever
   in a frame.
+
+## Log lines the match writes
+
+Every line also has `ts`, `event`, `who` (`src/log.ts`). `who` is the acting
+person's mark; for sim events it is the mark of the seat the event concerns,
+or `"bot"` for the bot's seat, or `"-"` for a creature's own act. `seat` is
+0 (east) or 1 (west). Marks of both seats are carried where a reader needs to
+know whose piece it was.
+
+- `match.create` `{ match, seat: 0 }`
+- `match.join` `{ match, seat: 1 }` · `match.bot` `{ match }` (who = seat 0, who asked for the bot)
+- `match.start` `{ match, map, seed, east, west }` (east/west are marks, or `"bot"`)
+- `command` `{ match, tick, seat, type, units }` (units = count, never the ids).
+  Aggregated: at most one line per seat per command type per 2 s, with
+  `n` = how many commands of that type were folded in and `units` their total.
+- `build.start` `{ match, tick, seat, kind, building }` · `build.done` same
+- `unit.trained` `{ match, tick, seat, kind, unit }`
+- `creature.aggro` `{ match, tick, creature: "nian"|..., target: <unit id>, targetSeat, owner: <mark of targetSeat> }` (who `"-"`)
+- `unit.died` `{ match, tick, seat | "wild", kind, unit, cause: "soldier"|"creature", by: <kind>, bySeat, owner: <mark of the dead piece's seat> }`
+  Aggregated per tick and cause: `count` when several die together.
+- `relic.claimed` `{ match, tick, seat, grain }`
+- `match.forfeit` `{ match, tick, seat, why: "idle"|"chose" }`
+- `match.end` `{ match, ticks, winner: <mark>|"bot"|null, winnerSeat, reason, east, west }`
+- `chronicle.seal` `{ match, colophon }`
+- `denied` `{ reason, route, owner?, match?, type? }` — `owner` is the mark of whose
+  unit/seat it was, when the refusal is about ownership (`not-yours` names the
+  true owner in the log only, never in the response).
