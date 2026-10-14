@@ -56,7 +56,7 @@ Triage: accepted → T-4. Check the relic tile is reachable and the pixiu is eve
 "away"; a spec moves a labourer onto it with the pixiu far and asserts the
 claim; the rules text and `look` say exactly where the relic is.
 
-### F-5 [fixed] major · round 1 · economist · economy
+### F-5 [verified] major · round 1 · economist · economy
 What: home groves ran dry by 3:50 and labourers went idle silently, five times
 in one match, twenty idle at a time.
 Expected: a warning, or labourers moving on to the next grove.
@@ -81,11 +81,11 @@ What: a group that kills its target goes idle; every enemy needs its own order.
 Triage: accepted → T-8 (attackers move on to the nearest visible enemy within
 the acquire radius).
 
-### F-9 [open] minor · round 1 · all · repro
+### F-9 [fixed] minor · round 1 · all · repro
 What: `status` doesn't show the seed, so repros say "default". Triage: accepted
 → T-9 (status shows match id and seed).
 
-### F-10 [open] minor · round 1 · economist · text client
+### F-10 [fixed] minor · round 1 · economist · text client
 What: `attack all 127` says "no units for 'all'". Triage: accepted → T-9 (list
 the selectors).
 
@@ -145,7 +145,7 @@ Triage: accepted → T-15 (home guard, waves muster before crossing). Checked
 against the other reports: the rusher and explorer still lost to the bot, so
 this is about defence, not about weakening its attack.
 
-### F-19 [fixed] major · round 2 · economist, explorer, rusher · warning
+### F-19 [verified] major · round 2 · economist, explorer, rusher · warning
 What: labourers raided at an out-of-view grove died with no warning; "enemy
 in view" never announced; the rusher's text client showed "nothing new" while
 units died (events missing in their client).
@@ -163,7 +163,7 @@ What: side is carried by a tiny 東 mark only; grain marks on groves read as
 creatures; creatures never seen in three minutes so "dangerous" unjudged.
 Triage: accepted → T-18 (own vs enemy silhouettes stronger, grove marks softer).
 
-### F-22 [open] minor · round 2 · UX · legibility
+### F-22 [rejected] minor · round 2 · UX · legibility
 What: in-view ground is lighter than remembered ground; the brief wants
 remembered ground in lighter *ink*. Triage: rejected: the brief's words are
 "explored-but-unseen ground is lighter ink than ground in view", and the board
@@ -180,7 +180,7 @@ Triage: accepted → T-18 (sticky HUD, 2px focus ring); button restyle deferred
 Pathing into fog plans around hidden enemy buildings; attack-validation
 timing differs for existing ids. Triage: accepted → T-13.
 
-### F-25 [open] minor · round 2 · audit · identity
+### F-25 [deferred] minor · round 2 · audit · identity
 A visitor can brute-force a UUID whose mark matches another's (2^24 hashes).
 Triage: deferred: marks tell people apart for a narrator; they were never an
 authentication. ADR 0002 says so; an HMAC-signed seal is the fix if marks ever
@@ -229,7 +229,7 @@ Triage: accepted → T-20. An unjoined match waits three minutes, not ten
 (enough to send a friend the link), and the creator can't recreate a match
 that just lapsed while someone else has tried to create one in that window.
 
-### F-33 [open] minor · round 2 · adversary · rules
+### F-33 [rejected] minor · round 2 · adversary · rules
 The idle forfeit runs on the wall clock, not game time (visible only under
 manual ticks). Triage: rejected for the deployed game, where game time and the
 wall clock are the same 4 ticks a second; under manual ticks wall-clock idle is
@@ -263,7 +263,7 @@ Four independent reports across two rounds.
 Triage: accepted → T-22 (idle spearmen go to the help of their own people
 attacked by enemy soldiers within twelve tiles; never for creatures).
 
-### F-37 [open] minor · round 3 · v2 · pixiu
+### F-37 [deferred] minor · round 3 · v2 · pixiu
 The heading is "unknown" at a first sighting, which is when it matters.
 Triage: deferred: a heading needs two sightings unless the server sends the
 pixiu's next waypoint, which is information a player can only infer by

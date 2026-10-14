@@ -152,13 +152,13 @@ export function describeEvent(ev: SimEvent, me: number): string | null {
   switch (ev.type) {
     case "unit.died": {
       const where = `at (${ev.x},${ev.y})`;
-      if (ev.side === "wild") return `${t} the ${kindName(ev.kind)} was killed by ${ev.bySide === me ? "your" : "enemy"} ${ev.byKind}s ${where}`;
+      if (ev.side === "wild") return `${t} the ${kindName(ev.kind)} was killed by ${ev.bySide === me ? "your" : "enemy"} ${plural(ev.byKind)} ${where}`;
       const mine = ev.side === me;
       const owner = mine ? "your" : "enemy";
       if (ev.cause === "creature") return `${t} ${owner} ${ev.kind} ${ev.unit} was killed by the ${kindName(ev.byKind)} ${where}`;
       return mine
         ? `${t} your ${ev.kind} ${ev.unit} fell to enemy ${plural(ev.byKind)} ${where}`
-        : `${t} enemy ${ev.kind} ${ev.unit} was killed by your ${ev.byKind}s ${where}`;
+        : `${t} enemy ${ev.kind} ${ev.unit} was killed by your ${plural(ev.byKind)} ${where}`;
     }
     case "creature.aggro":
       return `${t} the ${kindName(ev.kind)} turned on ${ev.targetSeat === me ? "your" : "an enemy"} ${ev.target === undefined ? "unit" : `unit ${ev.target}`}`;
@@ -180,12 +180,24 @@ export function ownBuildingHp(v: SeatView): Record<number, { kind: string; hp: n
 
 // ---- warnings (T-16) and heading (T-17) ----
 
+// Where, in words, relative to this seat's hall (same rule as where() in public/match.js).
+export function areaInWords(v: SeatView, x: number, y: number): string {
+  const hall = v.entities.find((e) => e.side === v.seat && e.kind === "hall");
+  const mid = v.width / 2;
+  const ns = y < 16 ? "north" : "south";
+  let place = "on the far side";
+  if (hall && Math.abs(x - hall.x) <= 14) place = "near your hall";
+  else if (Math.abs(x - mid) <= 8) place = "in the middle by the river";
+  else if (hall && Math.abs(x - hall.x) < Math.abs(x - (v.width - 1 - hall.x))) place = "between your hall and the river";
+  return `${place}, ${ns} half (${x},${y})`;
+}
+
 const AREA = 10; // tiles: one warning line per 10x10 area
 const areaKey = (x: number, y: number) => `${Math.floor(x / AREA)},${Math.floor(y / AREA)}`;
 
 // "Your labourers are under attack near (92,2)": own units that lost hp since
 // the last snapshot, or died to an enemy or a creature in the new events.
-export function attackWarnings(prev: Snapshot | undefined, now: Snapshot, events: SimEvent[], me: number): string[] {
+export function attackWarnings(prev: Snapshot | undefined, now: Snapshot, events: SimEvent[], me: number, view: SeatView): string[] {
   const hit = new Map<string, { kinds: Set<string>; x: number; y: number }>();
   const note = (kind: string, x: number, y: number) => {
     const k = areaKey(x, y);
@@ -210,7 +222,7 @@ export function attackWarnings(prev: Snapshot | undefined, now: Snapshot, events
     by.set(k, names);
   }
   return [...hit.entries()].map(([k, a]) => {
-    const head = `YOUR ${[...a.kinds].map((x) => plural(x)).join(" AND ").toUpperCase()} ARE UNDER ATTACK near (${a.x},${a.y})`;
+    const head = `YOUR ${[...a.kinds].map((x) => plural(x)).join(" AND ").toUpperCase()} ARE UNDER ATTACK ${areaInWords(view, a.x, a.y)}`;
     return killed.has(k) ? `${head}: ${killed.get(k)} killed by ${[...by.get(k)!].join(" and ")}` : head;
   });
 }
@@ -238,8 +250,8 @@ export function sightings(prev: Snapshot | undefined, v: SeatView, events: SimEv
     slain.set(k, g);
   }
   return [
-    ...[...groups.values()].map((g) => `Enemy spearmen sighted near (${g.x},${g.y}) — ${g.n} of them`),
-    ...[...slain.values()].map((g) => `Enemy spearmen sighted near (${g.x},${g.y}) — they killed ${g.n} of yours`),
+    ...[...groups.values()].map((g) => `Enemy spearmen sighted ${areaInWords(v, g.x, g.y)} — ${g.n} of them`),
+    ...[...slain.values()].map((g) => `Enemy spearmen sighted ${areaInWords(v, g.x, g.y)} — they killed ${g.n} of yours`),
   ];
 }
 

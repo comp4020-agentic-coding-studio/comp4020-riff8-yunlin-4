@@ -2,7 +2,7 @@
 // RULES_TEXT and the text client prints it. Numbers come from balance.ts, so
 // the rules can't drift from the game. Plain text, no HTML.
 
-import { BUILDINGS, CARRY, POP_CAP, RELIC_BONUS, UNITS } from "./sim/balance.ts";
+import { BUILDINGS, CARRY, DEFEND_RADIUS, POP_CAP, RELIC_BONUS, UNITS } from "./sim/balance.ts";
 import type { CreatureKind, Kind } from "./sim/types.ts";
 
 export const GLYPHS: Record<Kind, string> = {
@@ -61,7 +61,7 @@ export const RULES_TEXT = [
   "  attack: go after an enemy or creature you can see.",
   "  train: a hall or barracks adds a labourer or spearman to its queue (at most five).",
   "  stop: stand still.",
-  "Idle spearmen attack enemies that come near them and go to the help of your people attacked nearby. A unit beating on a building turns on whoever strikes it.",
+  `Idle spearmen attack enemies that come near them and go to the help of your people attacked within ${DEFEND_RADIUS} tiles. A unit beating on a building turns on whoever strikes it.`,
   "Units sent to attack move on to the nearest enemy in view when their target falls.",
   "Labourers fight poorly: spearmen are the answer to spearmen.",
   "",
