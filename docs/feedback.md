@@ -47,7 +47,7 @@ Triage: accepted → T-3. The server already sends fog-filtered `unit.died` with
 cause and killer kind (`recentEvents`); the text client and the page must say
 it in words, and warn when your hall or barracks is losing hp.
 
-### F-4 [fixed] major · round 1 · explorer · relic, pixiu
+### F-4 [verified] major · round 1 · explorer · relic, pixiu
 What: eight attempts to step a labourer onto the relic (56–60, 15–16) never
 claimed it; nothing said why.
 Expected: a claim, or a reason it can't be claimed.
@@ -138,7 +138,7 @@ What: stream caps (100, 10 per address) can be filled by others, cutting a
 seated player off.
 Triage: accepted → T-14 (a seated token is always admitted; a per-token cap).
 
-### F-18 [fixed] major · round 2 · economist · bot
+### F-18 [verified] major · round 2 · economist · bot
 What: the bot never defends its base once its waves are out; the economist
 walked into an empty base. Turtling won "too easily".
 Triage: accepted → T-15 (home guard, waves muster before crossing). Checked
@@ -248,16 +248,16 @@ Verified (fresh tester, not the reporter):
   starts and ends between two looks didn't warn (F-34).
 - F-1 [verified]: matches ran 8:37 and 10:46.
 
-### F-34 [fixed] major · round 3 · v1, v2 · warning
+### F-34 [verified] major · round 3 · v1, v2 · warning
 Ten to fifteen labourers killed at an out-of-view grove between two looks:
 deaths listed, but no attack warning or sighting first.
 Triage: accepted → T-21; enemy-caused deaths now raise both.
 
-### F-35 [fixed] major · round 3 · v1 · economy
+### F-35 [verified] major · round 3 · v1 · economy
 21 labourers idled at the hall although groves 19–21 tiles away had been seen.
 Triage: accepted → T-21; REGROVE_FAR_RADIUS 12 → 24, spec added.
 
-### F-36 [fixed] major · round 3 · v1, v2 (and round 2 economist, explorer) · combat
+### F-36 [verified] major · round 3 · v1, v2 (and round 2 economist, explorer) · combat
 Idle spearmen eleven tiles away ignore a raid killing their own labourers.
 Four independent reports across two rounds.
 Triage: accepted → T-22 (idle spearmen go to the help of their own people
@@ -331,3 +331,25 @@ Round 3 adversary (fresh, outside only), verifying security findings:
   Residual: one person who keeps commanding can hold the single slot for as
   long as a match lasts (ten minutes against the bot before it yields).
   Minor, by design (ADR 0003); for a human to review.
+
+Targeted re-test v4 (fresh, text client):
+- F-36 [verified]: idle spearmen nine tiles off engaged a raid on their own;
+  ones fifteen tiles off didn't, which is the twelve-tile rule working.
+- F-34 [verified]: the banner fired for a raid between two looks.
+- F-35 [verified]: labourers moved on through four groves, the last 35 tiles
+  out, by themselves.
+- F-18 [verified]: the bot kept a home defence that killed ten spearmen near
+  its base.
+- F-4 [verified]: the relic claimed (+400) by a labourer timed past the pixiu.
+
+### F-47 [fixed] minor · round 3 · v4 · wording
+"spearmans" left in the text client's kill lines; the defend range is
+unstated; warnings in coordinates only. Triage: accepted → T-24.
+
+### F-48 idea · round 3 · v4 · controls
+A rally or defend order. Deferred: six commands is the brief's set, and idle
+spearmen now defend within twelve tiles on their own.
+
+### F-49 minor · round 3 · v4 · pixiu
+The pixiu read "heading nowhere (still)" for 24 ticks: it stands its ground
+while fighting. Deferred with F-37.
