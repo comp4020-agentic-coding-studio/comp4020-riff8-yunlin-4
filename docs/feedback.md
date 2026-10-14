@@ -276,3 +276,21 @@ ahead information. For a human to review.
 ### F-39 idea · round 3 · v1 · economy
 New labourers stand idle at the hall. Deferred: a rally point is a second
 control to learn; "Select idle labourers" covers it.
+
+### F-40 [open] major · round 3 · UX · legibility
+What: "creatures read as terrain ornaments: a pale arch-and-hatch squiggle".
+Checked against the reviewer's own screenshot (`ux3-11`): no creature was in
+view; the arched strokes are *hills*, which the legend doesn't name. The real
+finding is that hills are unexplained.
+Triage: accepted → T-23 (legend names hills and the river; a creature's
+first sighting is announced in the event list).
+
+### F-41 [open] minor · round 3 · UX · controls
+Costs aren't on the buttons ("not enough grain" with 150 in hand for a
+200-grain barracks). Triage: accepted → T-23 (cost on Build/Train buttons).
+
+### F-42 minor · round 3 · UX · HUD
+"The HUD scrolls away." Triage: rejected: in the reviewer's own screenshot
+(`ux3-11`) the page is scrolled past its heading and the HUD is pinned at the
+top; the sticky band from T-18 works at 1280×800. At 390px the band is taller
+and the reviewer scrolled it into place, which is the band working too.
