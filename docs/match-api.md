@@ -21,7 +21,7 @@ cookie. Refusals are `{ "error": <code>, "message": <plain words> }`.
   "you": 0 | 1 | null,
   "manualTicks": false,
   "view": SeatView | null,
-  "result": { "winner": 0 | 1 | null, "reason": "hall" | "forfeit" | "abandoned" | "restart" | "time", "ticks": 2400,
+  "result": { "winner": 0 | 1 | null, "reason": "hall" | "forfeit" | "abandoned" | "restart" | "time" | "yielded", "ticks": 2400,
               "youWon": true, "chronicle": "…", "chronicleSealed": false } | null
 }
 ```
@@ -36,7 +36,9 @@ most recent finished match only to the two players who sat in it (others see
 ## Actions
 
 - `POST /api/match` `{}` → create the match and take seat 0. `201` + status.
-  `409 match-busy` if a match is waiting or playing.
+  `409 match-busy` if a match is waiting or playing, except that a match
+  against the bot that has run ten minutes (`MATCH_BOT_YIELD_MS`) ends with
+  reason `yielded` when another visitor asks, and the new match is created.
 - `POST /api/match/join` `{}` → take seat 1. `200` + status. `409 match-full`,
   `409 no-match`, `409 already-seated`.
 - `POST /api/match/bot` `{}` → seat 0 fills seat 1 with the bot; the match
@@ -66,6 +68,11 @@ most recent finished match only to the two players who sat in it (others see
   time. Sent with the tick's view.
 - Heartbeat comment every 20 s. No seal token, mark or player text is ever
   in a frame.
+- A stream lasts at most 15 minutes, and the browser reconnects. `503` when
+  the slots are full (100, 10 per address); a visitor holding a seat is
+  always admitted, and the oldest watcher's stream closes to make room. A
+  visitor's fifth stream closes their oldest. `stream.close` carries `reason`:
+  `closed`, `lifetime`, `slow`, `evicted`, `replaced` or `error`.
 
 ## Log lines the match writes
 

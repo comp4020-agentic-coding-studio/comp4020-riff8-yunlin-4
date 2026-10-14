@@ -72,3 +72,6 @@ what has to change first, in the same commit.
 - Browser checks live in `e2e/` and run with `pnpm e2e` (set `CHROME_PATH`
   if Chrome isn't installed as a channel). `spec/` runs in CI with no browser,
   so everything in it works over plain HTTP.
+- A stream response is written only through a guard that checks it hasn't
+  ended, and ending a stream takes it out of every broadcast set first
+  (`spec/match-robustness`).

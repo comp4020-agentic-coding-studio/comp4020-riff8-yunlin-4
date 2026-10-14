@@ -56,10 +56,21 @@ refuses to start with it when `FLY_APP_NAME` is set.
   seat's open streams; a reader that doesn't keep up is dropped (as on the
   scroll's stream) and reconnects to a fresh full view. Status frames for
   watchers are tiny and sent only when the status changes.
+- Stream slots: 100 open streams, 10 per address, 4 per visitor (a fifth
+  closes their own oldest). A visitor holding a seat is always admitted; at
+  the cap the oldest watcher's stream closes to make room, so watchers can't
+  cut a player off from their own match. Every stream leaves the broadcast
+  set before it is ended, and nothing writes to an ended stream: a write
+  after end is an unhandled error that would stop the process for everyone.
 - The tick budget: at the population cap (40 a side) plus four creatures, a
   tick is checked to fit well inside its 250 ms (`spec/sim-perf`); pathing has
   a per-tick node budget, so a crowd of unreachable goals delays paths rather
   than the tick.
 - Holding the slot: a visitor who creates a match and leaves holds it for at
   most ten minutes; one who plays the bot and stops commanding forfeits after
-  five.
+  five. One who keeps commanding the bot could hold it for good, so a match
+  against the bot that has run ten minutes yields when another visitor asks
+  to play: it ends with reason `yielded` (no winner) and the asker's match is
+  created, with its second seat open to anyone, the yielded player included.
+  This is a challenge, not a queue: nobody waits in line, and a match between
+  two people never yields.

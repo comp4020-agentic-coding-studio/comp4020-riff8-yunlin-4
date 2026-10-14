@@ -37,14 +37,19 @@ const FORFEIT_MS = Number(process.env.MATCH_IDLE_FORFEIT_MS ?? 5 * 60_000);
 const ABANDON_MS = Number(process.env.MATCH_ABANDON_MS ?? 10 * 60_000);
 const RATE_PER_SECOND = 10;
 const COMMAND_LOG_MS = 2000;
-const MAX_STREAMS = 100;
-const MAX_STREAMS_PER_IP = 10;
+const MAX_STREAMS = Number(process.env.MATCH_STREAMS_MAX ?? 100);
+const MAX_STREAMS_PER_IP = Number(process.env.MATCH_STREAMS_PER_IP ?? 10);
+// A visitor's tabs; past this, a new one replaces their oldest.
+const MAX_STREAMS_PER_TOKEN = Number(process.env.MATCH_STREAMS_PER_TOKEN ?? 4);
+// A match against the bot yields the slot to another visitor who asks for it
+// after this long (ADR 0003); a match between two people never does.
+const BOT_YIELD_MS = Number(process.env.MATCH_BOT_YIELD_MS ?? 10 * 60_000);
 const HEARTBEAT_MS = 20_000;
-const MAX_STREAM_MS = 15 * 60_000;
+const MAX_STREAM_MS = Number(process.env.MATCH_STREAM_MAX_MS ?? 15 * 60_000);
 const CHRONICLE_MAX = 320;
 const NOT_YOURS = { error: "not-yours", message: "no such unit of yours" };
 
-export type Reason = "hall" | "forfeit" | "abandoned" | "restart" | "time";
+export type Reason = "hall" | "forfeit" | "abandoned" | "restart" | "time" | "yielded";
 
 export interface Outcome {
   status: number;
@@ -74,6 +79,7 @@ interface Live {
   queue: { seat: Seat; command: Command }[];
   lastCmd: [number, number];
   lastAny: number;
+  startedAt: number;
   rate: [number[], number[]];
   chron: Chron;
   // the last RECENT fog-filtered events per seat, for the status object
@@ -197,7 +203,11 @@ export function statusFor(token: string | null, withView = true): StatusObject {
 export function create(token: string): Outcome {
   if (live) {
     if (seatOfLive(token) !== null) return refuse(409, "already-seated", "You already hold a seat in this match.", { match: live.id });
-    return refuse(409, "match-busy", "A match is already under way; only one runs at a time.", { match: live.id });
+    if (!(live.bot && live.status === "playing" && Date.now() - live.startedAt >= BOT_YIELD_MS)) {
+      return refuse(409, "match-busy", "A match is already under way; only one runs at a time.", { match: live.id });
+    }
+    // Someone else wants the slot and the bot match has had its time.
+    end(null, "yielded");
   }
   const mapId = MAP_IDS[0]!;
   const seed = randomInt(0, 2 ** 31 - 1);
@@ -213,6 +223,7 @@ export function create(token: string): Outcome {
     queue: [],
     lastCmd: [0, 0],
     lastAny: 0,
+    startedAt: 0,
     rate: [[], []],
     chron: emptyChron(),
     recent: [[], []],
@@ -257,6 +268,7 @@ function start(westMark: string, westHash: string | null): void {
   const now = Date.now();
   m.lastCmd = [now, now];
   m.lastAny = now;
+  m.startedAt = now;
   log("match.start", { who: markOf(m.tokens[0]), match: m.id, map: m.mapId, seed: m.seed, east: seatMark(m, 0), west: seatMark(m, 1) });
   if (MANUAL) idleTimer = setInterval(checkIdle, Math.max(20, Math.min(1000, Math.floor(FORFEIT_MS / 5))));
   else tickTimer = setInterval(tick, TICK_MS);
@@ -710,6 +722,7 @@ function chronicleText(m: Live, winner: Seat | null, reason: Reason, ticks: numb
         ? `${names[c.forfeit.seat]} yielded the field to ${names[winner ?? 0]} at ${clock(ticks)}`
         : `${names[c.forfeit.seat]} left the field and ${names[winner ?? 0]} held it at ${clock(ticks)}`;
   } else if (reason === "time") ending = `the scroll ran out at ${clock(ticks)} with neither hall taken`;
+  else if (reason === "yielded") ending = `another visitor came to the table and the bot yielded it at ${clock(ticks)}`;
   else ending = `both sides left the field and the match was abandoned at ${clock(ticks)}`;
   return clipChronicle(clauses, ending);
 }
@@ -740,8 +753,11 @@ interface Viewer {
   ip: string;
   seat: Seat | null;
   frames: number;
+  // Takes the viewer out of every broadcast set, then ends its response.
+  drop: (reason: string) => void;
 }
 
+// Insertion order is age: the first entry is the oldest stream.
 const viewers = new Set<Viewer>();
 const perIp = new Map<string, number>();
 
@@ -750,12 +766,13 @@ const perIp = new Map<string, number>();
 // backlog passes this, and reconnects to a fresh full view.
 const MAX_BACKLOG = 256 * 1024;
 
+// Every match-stream write goes through here. An ended response still in
+// `viewers` would throw ERR_STREAM_WRITE_AFTER_END as an unhandled 'error'
+// and end the process for everyone (spec/match-robustness).
 function write(v: Viewer, frame: string): void {
-  if (!viewers.has(v)) return;
+  if (!viewers.has(v) || v.res.writableEnded || v.res.destroyed) return;
   v.res.write(frame);
-  if (v.res.writableLength <= MAX_BACKLOG) return;
-  viewers.delete(v);
-  v.res.destroy();
+  if (v.res.writableLength > MAX_BACKLOG) v.drop("slow");
 }
 
 function sendFrame(v: Viewer, event: string, data: unknown): void {
@@ -780,8 +797,21 @@ function broadcastStatus(): void {
   }
 }
 
+// Who gets a stream: a visitor holding a seat always does (the oldest stream
+// of someone without one makes room); anyone else within the caps. A visitor's
+// tabs past MAX_STREAMS_PER_TOKEN replace their own oldest.
+function admit(token: string, ip: string): boolean {
+  const own = [...viewers].filter((v) => v.token === token);
+  if (own.length >= MAX_STREAMS_PER_TOKEN) own[0]!.drop("replaced");
+  if (seatOfLive(token) !== null) {
+    if (viewers.size >= MAX_STREAMS) [...viewers].find((v) => seatOfLive(v.token) === null)?.drop("evicted");
+    return true;
+  }
+  return viewers.size < MAX_STREAMS && (perIp.get(ip) ?? 0) < MAX_STREAMS_PER_IP;
+}
+
 export function openMatchStream(req: IncomingMessage, res: ServerResponse, token: string, ip: string, who: string): void {
-  if (viewers.size >= MAX_STREAMS || (perIp.get(ip) ?? 0) >= MAX_STREAMS_PER_IP) {
+  if (!admit(token, ip)) {
     log("denied", { who, reason: "busy", route: "GET /match/events" });
     res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Retry-After": "10" });
     res.end("too many open pages");
@@ -794,30 +824,37 @@ export function openMatchStream(req: IncomingMessage, res: ServerResponse, token
     "X-Accel-Buffering": "no",
   });
   res.write("retry: 2000\n\n");
-  const v: Viewer = { res, token, ip, seat: resolveSeat(token), frames: 0 };
+
+  const openedAt = Date.now();
+  let dropped = false;
+  // Idempotent: whatever ends the stream first (lifetime, backlog, eviction,
+  // an error, the socket closing) releases its slot; the rest are no-ops.
+  const drop = (reason: string): void => {
+    if (dropped) return;
+    dropped = true;
+    viewers.delete(v);
+    clearInterval(heartbeat);
+    clearTimeout(lifetime);
+    const left = (perIp.get(ip) ?? 1) - 1;
+    if (left > 0) perIp.set(ip, left);
+    else perIp.delete(ip);
+    log("stream.close", { who, route: "GET /match/events", ms: Date.now() - openedAt, events: v.frames, reason });
+    // A reader with nothing pending gets a clean end; one with a backlog is cut.
+    if (!res.writableEnded && !res.destroyed && res.writableLength === 0) res.end();
+    else res.destroy();
+  };
+  const v: Viewer = { res, token, ip, seat: resolveSeat(token), frames: 0, drop };
+  const heartbeat = setInterval(() => write(v, ": hb\n\n"), HEARTBEAT_MS);
+  const lifetime = setTimeout(() => drop("lifetime"), MAX_STREAM_MS);
   viewers.add(v);
   perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
+  req.on("close", () => drop("closed"));
+  res.on("close", () => drop("closed"));
+  res.on("error", () => drop("error"));
+
   const status = statusFor(token, true);
   const { view, recentEvents: _recent, ...rest } = status;
   sendFrame(v, "status", { ...rest, view: null });
   if (view) sendFrame(v, "view", view);
-
-  const openedAt = Date.now();
   log("stream.open", { who, route: "GET /match/events" });
-  const heartbeat = setInterval(() => write(v, ": hb\n\n"), HEARTBEAT_MS);
-  const lifetime = setTimeout(() => res.end(), MAX_STREAM_MS);
-  let closed = false;
-  const close = (): void => {
-    if (closed) return;
-    closed = true;
-    clearInterval(heartbeat);
-    clearTimeout(lifetime);
-    viewers.delete(v);
-    log("stream.close", { who, route: "GET /match/events", ms: Date.now() - openedAt, events: v.frames });
-    const left = (perIp.get(ip) ?? 1) - 1;
-    if (left > 0) perIp.set(ip, left);
-    else perIp.delete(ip);
-  };
-  req.on("close", close);
-  res.on("close", close);
 }

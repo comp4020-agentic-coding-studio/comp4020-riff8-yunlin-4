@@ -24,7 +24,7 @@ const MAX_CLIENTS_PER_IP = 20;
 const HEARTBEAT_MS = 20_000;
 // A stream is closed after this long and the browser reconnects with its
 // Last-Event-ID. Bounds any one connection's life without losing an event.
-const MAX_STREAM_MS = 15 * 60_000;
+const MAX_STREAM_MS = Number(process.env.EVENTS_STREAM_MAX_MS ?? 15 * 60_000);
 
 interface Buffered {
   seq: number;
@@ -49,7 +49,13 @@ export function clientCount(): number {
 // replays from its last id.
 const sentCount = new WeakMap<ServerResponse, number>();
 
+// An ended response is never written: that would emit an unhandled
+// ERR_STREAM_WRITE_AFTER_END and end the process (spec/match-robustness).
 function send(res: ServerResponse, frame: string): boolean {
+  if (res.writableEnded || res.destroyed) {
+    clients.delete(res);
+    return false;
+  }
   if (!frame.startsWith(":")) sentCount.set(res, (sentCount.get(res) ?? 0) + 1);
   if (res.write(frame)) return true;
   clients.delete(res);
@@ -107,7 +113,6 @@ export function openStream(req: IncomingMessage, res: ServerResponse, since: str
   const openedAt = Date.now();
   log("stream.open", { who, replayed: missed === "reset" ? "reset" : missed.length });
   const heartbeat = setInterval(() => send(res, ": hb\n\n"), HEARTBEAT_MS);
-  const lifetime = setTimeout(() => res.end(), MAX_STREAM_MS);
   let closed = false;
   const close = (): void => {
     if (closed) return;
@@ -120,6 +125,15 @@ export function openStream(req: IncomingMessage, res: ServerResponse, since: str
     if (left > 0) perIp.set(ip, left);
     else perIp.delete(ip);
   };
+  // Out of the broadcast set before the response ends.
+  const lifetime = setTimeout(() => {
+    close();
+    res.end();
+  }, MAX_STREAM_MS);
   req.on("close", close);
   res.on("close", close);
+  res.on("error", () => {
+    close();
+    res.destroy();
+  });
 }
