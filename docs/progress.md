@@ -36,7 +36,7 @@ alone; this file does its job.
 - [x] Round 2: all six personas plus a log-only reader and a blind code audit; 4 blockers, 13 majors (21:48)
 - [x] T-21 (F-34, F-35, major) raids between looks warn; regrove reach 24 (21:59)
 - [x] T-22 (F-36, F-38, major) idle spearmen defend their people nearby; plurals (22:03)
-- [ ] T-23 (F-40, F-41, F-43, F-44, F-45) legend names hills, creatures announced, costs on buttons, early banner, no layout shift, game linked near the top — done when: screenshots
+- [x] T-23 (F-40, F-41, F-43, F-44, F-45) legend names hills, creatures announced, costs on buttons, early banner, no layout shift, game linked near the top — done when: screenshots
 - [x] T-20 (F-32, major) an unjoined match lapses after three minutes — done when: spec with short env
 
 ### M3 — hold up (2:30–3:30)

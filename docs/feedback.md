@@ -277,7 +277,7 @@ ahead information. For a human to review.
 New labourers stand idle at the hall. Deferred: a rally point is a second
 control to learn; "Select idle labourers" covers it.
 
-### F-40 [open] major · round 3 · UX · legibility
+### F-40 [fixed] major · round 3 · UX · legibility
 What: "creatures read as terrain ornaments: a pale arch-and-hatch squiggle".
 Checked against the reviewer's own screenshot (`ux3-11`): no creature was in
 view; the arched strokes are *hills*, which the legend doesn't name. The real
@@ -285,7 +285,7 @@ finding is that hills are unexplained.
 Triage: accepted → T-23 (legend names hills and the river; a creature's
 first sighting is announced in the event list).
 
-### F-41 [open] minor · round 3 · UX · controls
+### F-41 [fixed] minor · round 3 · UX · controls
 Costs aren't on the buttons ("not enough grain" with 150 in hand for a
 200-grain barracks). Triage: accepted → T-23 (cost on Build/Train buttons).
 
@@ -302,16 +302,16 @@ Round 3 newcomer (fresh, browser), verifying F-29 and F-30:
 - F-36's raid-death warning reached the log at 6:49 but the banner only at
   7:09 (F-44).
 
-### F-43 [open] major · round 3 · newcomer3 · front page
+### F-43 [fixed] major · round 3 · newcomer3 · front page
 The game's link sits below a very tall painting; a cold visitor might never
 scroll to it. Triage: accepted → T-23 (one quiet line near the top).
 
-### F-44 [open] major · round 3 · newcomer3, UX · warning
+### F-44 [fixed] major · round 3 · newcomer3, UX · warning
 The banner comes only when the hall is hit; earlier deaths go to the log only,
 with coordinates a newcomer can't read. Triage: accepted → T-23 (first enemy-
 caused death raises the banner, the place said in words).
 
-### F-45 [open] minor · round 3 · newcomer3 · controls
+### F-45 [fixed] minor · round 3 · newcomer3 · controls
 The first-steps and "Now click" lines shift the map, so a click aimed at a
 grove misses (worst at 390px). Triage: accepted → T-23 (space reserved).
 
