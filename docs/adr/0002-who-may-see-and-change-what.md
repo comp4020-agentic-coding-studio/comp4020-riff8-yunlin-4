@@ -65,6 +65,25 @@ anything that touches the named piece's state. So a fogged enemy's existence
 can't be probed through status codes. Timing is not made constant; the check
 is a map lookup either way.
 
+### What the fog has to hide besides pieces
+
+A blind audit and an adversarial playtester found the fog leaking through
+side channels, and these are decisions too:
+
+- **Ids.** Unit ids are not secret, but one global counter let a seat read
+  the enemy's production from gaps in its own new ids. Ids come from
+  per-side sequences (seat 0's pieces 3k+1, seat 1's 3k+2, creatures 3k+3),
+  so nothing one side makes moves the other's ids.
+- **Paths.** A unit plans its route on what its own seat knows (unseen ground
+  as open plain, no buildings it hasn't seen), so a detour can't reveal a
+  hidden barracks; it re-plans when the blocker comes into view.
+- **Answers.** Placement refusals ("not open ground in view", "someone is
+  standing there") are about tiles in view only. Attack validation does the
+  same work whether or not a hidden id exists.
+- **The relic** is shown as claimed to both seats, and to the claimer as
+  theirs. That one bit is deliberate: the board would otherwise keep offering
+  a prize that's gone.
+
 ## Costs
 
 - A person who clears cookies, or switches browser, is a new person, and loses
@@ -72,9 +91,14 @@ is a map lookup either way.
 - Marks tell people apart in a log but can't say who they are; that's the
   point, and it means the crit narrator needs each player to read out their
   own mark from their own page.
-- One match at a time (ADR 0003): a third visitor can watch that a match is
-  under way and nothing more. Someone who creates a match and walks away holds
-  the slot for up to ten minutes.
+- One match at a time (ADR 0003): a third visitor can see that a match is
+  under way and nothing more. A match nobody joins lapses after three minutes,
+  and a bot match older than ten minutes yields to someone else who asks.
+- A mark is a short hash, not a credential: someone who picks their own
+  well-formed seal could search for one whose mark matches another visitor's
+  (about 2^24 hashes) and muddy the log's attribution. Marks only tell people
+  apart for a reader; they gate nothing. If they ever did, the seal would need
+  signing.
 - Rate limits are per seat and per address, so a classroom behind one address
   shares the draft and stream allowance (crit 9's caps, unchanged).
 
