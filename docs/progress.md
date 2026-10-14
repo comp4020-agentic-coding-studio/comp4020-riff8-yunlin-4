@@ -50,8 +50,8 @@ alone; this file does its job.
 
 ### Finish (3:30–4:00)
 - [x] PROCESS.md, reflections/crit-10.md (22:03, numbers updated 22:20)
-- [ ] `pnpm check` against the final Docker image with `--tmpfs /data`; `pnpm check:evidence`
-- [ ] prompt.md deleted in the last commit
+- [x] `pnpm check` against the final Docker image with `--tmpfs /data`, twice, 379 green; `pnpm check:evidence` green; browser pass at 1280 and 390 on the image, console clean (22:21)
+- [x] prompt.md deleted in the last commit (22:22)
 
 ## Found along the way
 
