@@ -23,6 +23,15 @@ export const CREATURE_LINES: Record<CreatureKind, string> = {
   pixiu: "Walks a fixed loop over the fords and past the relic, attacking units it meets; a labourer who reaches the relic while it is away claims the bonus, but one who reaches it while it is near is attacked.",
 };
 
+// Where each lives, in plain map terms: a second, short sentence after the
+// rule, so a player can plan around a creature they haven't met yet.
+export const CREATURE_WHERE: Record<CreatureKind, string> = {
+  nian: "its den is at the head of the river, in the north middle of the scroll, inside the richest grove.",
+  jiaolong: "anywhere in the river down the middle of the scroll; the two fords and the causeway are where it strikes.",
+  qilin: "its glade is at the river's mouth, in the south middle, with groves on either side.",
+  pixiu: "it walks the north and south fords, out onto both banks, and the causeway past the relic.",
+};
+
 const NAMES: Record<CreatureKind, string> = {
   nian: "年 nian",
   jiaolong: "蛟龍 jiaolong",
@@ -41,7 +50,7 @@ export const RULES_TEXT = [
   "Seat 0, the first to sit, starts in the east (the right-hand end); seat 1 starts in the west.",
   "The scroll reads right to left, like the painting.",
   "",
-  `Grain is the only resource. Groves (finite) hold it; a labourer (勞, ${L.cost} grain) carries ${CARRY} at a time back to the hall, and keeps going until the grove runs out.`,
+  `Grain is the only resource. Groves (finite) hold it; a labourer (勞, ${L.cost} grain) carries ${CARRY} at a time back to the hall, and when a grove runs out moves on to the nearest grove you have seen (never the nian's).`,
   `The hall trains labourers. Labourers build a barracks (營, ${BUILDINGS.barracks.cost} grain), which trains spearmen (兵, ${S.cost} grain).`,
   `Each side may have at most ${POP_CAP} people, counting those still in training.`,
   "",
@@ -52,16 +61,20 @@ export const RULES_TEXT = [
   "  attack: go after an enemy or creature you can see.",
   "  train: a hall or barracks adds a labourer or spearman to its queue (at most five).",
   "  stop: stand still.",
-  "Idle spearmen attack enemies that come near them.",
+  "Idle spearmen attack enemies that come near them. A unit beating on a building turns on whoever strikes it.",
+  "Units sent to attack move on to the nearest enemy in view when their target falls.",
+  "Labourers fight poorly: spearmen are the answer to spearmen.",
   "",
   "Fog is unpainted silk: you see only what your people and buildings see now.",
   "Ground you have seen stays inked, paler; pieces you can no longer see vanish.",
-  "Rivers, hills, groves and buildings block the way; the river has two fords.",
+  "Rivers, hills, groves and buildings block the way.",
+  "The river runs down the middle of the scroll, north to south; it has two fords (north and south) joined by a causeway of shallows.",
   "",
   "Creatures belong to neither side:",
-  ...(Object.keys(CREATURE_LINES) as CreatureKind[]).map((k) => `  ${NAMES[k]}: ${CREATURE_LINES[k]}`),
+  ...(Object.keys(CREATURE_LINES) as CreatureKind[]).map((k) => `  ${NAMES[k]}: ${CREATURE_LINES[k]} Where: ${CREATURE_WHERE[k]}`),
   "",
-  `The relic (in mid-river, between the fords) gives ${RELIC_BONUS} grain, once per match, to whoever claims it first.`,
+  `The relic is on the little island in mid-river, halfway between the north and south fords (x 55–56, y 15–16), reached along the causeway from either ford.`,
+  `A labourer who steps onto it while the pixiu is out on a ford or a bank claims ${RELIC_BONUS} grain, once per match, for whoever gets there first.`,
   "",
   "A side that sends no command for 5 minutes forfeits. A match with no command from anyone for 10 minutes is abandoned.",
 ].join("\n");

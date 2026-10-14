@@ -58,25 +58,35 @@ function ownUnits(state: SimState, seat: Seat, ids: number[]): Entity[] {
   return mine;
 }
 
-// Whether a building of this kind may go down at x,y for this seat now: every
-// footprint tile plain, free, and in the seat's view (so the answer can never
-// reveal anything the seat can't already see).
-export function canPlace(state: SimState, seat: Seat, kind: "barracks", x: number, y: number, vis?: Uint8Array): boolean {
+// Why a building of this kind can't go down at x,y for this seat now, or
+// null if it can. The view is checked over the whole footprint before
+// anything else, so every other answer is only ever about tiles the seat can
+// see now, and the answer can never reveal anything it can't.
+export function placeProblem(state: SimState, seat: Seat, kind: "barracks", x: number, y: number, vis?: Uint8Array): string | null {
   const size = BUILDINGS[kind].size;
-  if (x < 0 || y < 0 || x + size > state.width || y + size > state.height) return false;
+  const need = `a ${kind} needs ${size}×${size} open plain ground`;
+  if (x < 0 || y < 0 || x + size > state.width || y + size > state.height) return `${need}, all on the map`;
   const v = vis ?? visibleTiles(state, seat);
+  for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) if (!v[(y + dy) * state.width + x + dx]) return "not open ground in view";
   for (let dy = 0; dy < size; dy++) {
     for (let dx = 0; dx < size; dx++) {
       const i = (y + dy) * state.width + x + dx;
-      if (!v[i] || terrainAt(state, i) !== "p" || state.occ[i] !== 0) return false;
+      if (state.occ[i] !== 0) return `${need}: a building is in the way`;
+      if (terrainAt(state, i) !== "p") return need;
     }
   }
-  // nobody may be standing there (every such tile is in view, so this says
-  // nothing the seat can't already see)
+  // nobody this seat can see may be standing there (every tile is in view, so
+  // a piece it can't see there, a diving jiaolong, isn't on plain ground)
   for (const e of state.entities) {
-    if (e.hp > 0 && e.size === 1 && e.x >= x && e.x < x + size && e.y >= y && e.y < y + size) return false;
+    if (e.hp > 0 && e.size === 1 && e.x >= x && e.x < x + size && e.y >= y && e.y < y + size && seenBy(state, v, seat, e)) {
+      return `${need}: someone is standing there`;
+    }
   }
-  return true;
+  return null;
+}
+
+export function canPlace(state: SimState, seat: Seat, kind: "barracks", x: number, y: number, vis?: Uint8Array): boolean {
+  return placeProblem(state, seat, kind, x, y, vis) === null;
 }
 
 function check(state: SimState, seat: Seat, raw: unknown): Command {
@@ -128,7 +138,8 @@ function check(state: SimState, seat: Seat, raw: unknown): Command {
       if (o.building !== "barracks") fail("malformed", "unknown building kind");
       const [x, y] = coord(state, o);
       if (!mine.every((e) => e.kind === "labourer")) fail("invalid", "only labourers build");
-      if (!canPlace(state, seat, "barracks", x, y)) fail("invalid", "can't build there");
+      const problem = placeProblem(state, seat, "barracks", x, y);
+      if (problem) fail("invalid", problem);
       if (state.grain[seat] < BUILDINGS.barracks.cost) fail("grain", "not enough grain");
       return { type: "build", units: ids, building: "barracks", x, y };
     }

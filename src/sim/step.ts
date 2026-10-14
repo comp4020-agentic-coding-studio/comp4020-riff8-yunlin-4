@@ -18,7 +18,9 @@ import {
   POP_CAP,
   QILIN,
   QILIN_GATHER_MULT,
+  REGROVE_FAR_RADIUS,
   REGROVE_RADIUS,
+  RETALIATE_RADIUS,
   RELIC_BONUS,
   REPATH_TICKS,
   UNITS,
@@ -65,7 +67,10 @@ function hit(ctx: Ctx, by: Entity, target: Entity, damage: number): void {
   target.hitByKind = by.kind;
   target.hitBySide = by.side;
   if (target.kind === "qilin" && by.side !== "wild") target.provoked[by.side] = true;
-  if (target.hp > 0) return;
+  if (target.hp > 0) {
+    retaliate(ctx, target, by);
+    return;
+  }
   target.hp = 0;
   const s = ctx.state;
   ctx.events.push({
@@ -89,6 +94,26 @@ function hit(ctx: Ctx, by: Entity, target: Entity, damage: number): void {
       ctx.events.push({ type: "match.end", tick: s.tick, winner, reason: "hall" });
     }
   }
+}
+
+// A unit struck by the other seat turns on its attacker, if the attacker is
+// within RETALIATE_RADIUS, when it is beating on a building, or is an idle
+// spearman. A unit on any other order (a move, gathering, building, a chosen
+// unit or creature to fight) keeps to it: the player decided.
+function retaliate(ctx: Ctx, target: Entity, by: Entity): void {
+  if (!isUnit(target.kind) || target.side === "wild" || by.side === "wild" || by.side === target.side) return;
+  if (dist(target, by) > RETALIATE_RADIUS) return;
+  const o = target.order;
+  if (o === null) {
+    if (target.kind !== "spearman") return;
+  } else {
+    if (o.type !== "attack" || o.target === by.id) return;
+    const current = findEntity(ctx.state, o.target);
+    if (current && !isBuilding(current.kind)) return;
+  }
+  target.order = { type: "attack", target: by.id, auto: true };
+  target.path = [];
+  target.pathKey = "";
 }
 
 // ---- movement ----
@@ -162,18 +187,34 @@ function qilinPeaceful(s: SimState): boolean {
 }
 
 // The next grove tile to work: the given one if it has grain, else the
-// nearest with grain within REGROVE_RADIUS that this seat has seen as a grove.
+// nearest with grain within REGROVE_RADIUS that this seat has seen as a grove,
+// else the nearest such within REGROVE_FAR_RADIUS that isn't inside the
+// nian's leash. -1 if there is none.
 function groveFor(s: SimState, seat: Seat, tile: number): number {
   if (s.groveGrain[tile] > 0) return tile;
+  const near = nearestGrove(s, seat, tile, REGROVE_RADIUS, false);
+  return near >= 0 ? near : nearestGrove(s, seat, tile, REGROVE_FAR_RADIUS, true);
+}
+
+function inNianLeash(s: SimState, x: number, y: number): boolean {
+  const [dx0, dy0] = getMap(s).nianDen;
+  return distToRect(x, y, dx0, dy0, 2, 3) <= NIAN.leash;
+}
+
+function nearestGrove(s: SimState, seat: Seat, tile: number, radius: number, avoidNian: boolean): number {
   const tx = tile % s.width;
   const ty = Math.floor(tile / s.width);
   let best = -1;
   let bestD = Infinity;
-  for (let y = Math.max(0, ty - REGROVE_RADIUS); y <= Math.min(s.height - 1, ty + REGROVE_RADIUS); y++) {
-    for (let x = Math.max(0, tx - REGROVE_RADIUS); x <= Math.min(s.width - 1, tx + REGROVE_RADIUS); x++) {
+  for (let y = Math.max(0, ty - radius); y <= Math.min(s.height - 1, ty + radius); y++) {
+    for (let x = Math.max(0, tx - radius); x <= Math.min(s.width - 1, tx + radius); x++) {
       const i = y * s.width + x;
       if (s.groveGrain[i] <= 0 || s.revealed[seat][i] !== G) continue;
-      const d = Math.max(Math.abs(x - tx), Math.abs(y - ty));
+      if (avoidNian && inNianLeash(s, x, y)) continue;
+      // ties go nearer home, then north, then towards the river: the same
+      // choice both seats would make on their mirrored halves
+      const inland = seat === 0 ? s.width - 1 - x : x;
+      const d = Math.max(Math.abs(x - tx), Math.abs(y - ty)) * s.width * s.height + y * s.width + (s.width - 1 - inland);
       if (d < bestD) {
         bestD = d;
         best = i;
@@ -195,20 +236,27 @@ function attackStep(ctx: Ctx, e: Entity, target: Entity, damage: number, attackT
   return stepToward(ctx, e, rectGoal(target, 1), `a${target.id}`, speed, passable, true);
 }
 
-function acquire(ctx: Ctx, e: Entity, seat: Seat): Entity | undefined {
+// The nearest enemy this unit's seat can see within ACQUIRE_RADIUS: the other
+// seat's units first, then its buildings, then a creature. Creatures count
+// only if they are attacking one of this seat's pieces (`onlyMe`: this unit).
+function acquire(ctx: Ctx, e: Entity, seat: Seat, onlyMe = false): Entity | undefined {
   const s = ctx.state;
   let best: Entity | undefined;
+  let bestRank = Infinity;
   let bestD = Infinity;
   for (const t of s.entities) {
     if (t.hp <= 0 || t.side === seat) continue;
     if (t.side === "wild") {
       const tt = t.targetId ? findEntity(s, t.targetId) : undefined;
-      if (!tt || tt.side !== seat) continue;
+      if (!tt || tt.side !== seat || (onlyMe && tt.id !== e.id)) continue;
     }
     if (!seenBy(s, ctx.vis[seat], seat, t)) continue;
     const d = dist(e, t);
-    if (d <= ACQUIRE_RADIUS && d < bestD) {
+    if (d > ACQUIRE_RADIUS) continue;
+    const rank = t.side === "wild" ? 2 : isBuilding(t.kind) ? 1 : 0;
+    if (rank < bestRank || (rank === bestRank && d < bestD)) {
       best = t;
+      bestRank = rank;
       bestD = d;
     }
   }
@@ -238,10 +286,18 @@ function unitTick(ctx: Ctx, e: Entity): void {
       return;
     }
     case "attack": {
-      const t = findEntity(s, o.target);
+      let t = findEntity(s, o.target);
       if (!t || !seenBy(s, ctx.vis[seat], seat, t) || (o.auto && dist(e, t) > ACQUIRE_RADIUS * 2)) {
-        setIdle(e);
-        return;
+        // an explicit attack whose target is gone moves on to the next enemy in view
+        const next = o.auto ? undefined : acquire(ctx, e, seat, true);
+        if (!next) {
+          setIdle(e);
+          return;
+        }
+        o.target = next.id;
+        e.path = [];
+        e.pathKey = "";
+        t = next;
       }
       e.task = "attacking";
       const r = attackStep(ctx, e, t, stats.damage, stats.attackTicks, stats.speed, walk);

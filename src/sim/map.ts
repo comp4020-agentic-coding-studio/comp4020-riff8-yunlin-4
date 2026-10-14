@@ -107,18 +107,20 @@ function build(): MapDef {
     qilinPost: [55, 30],
     glade,
     relic,
-    // A figure of eight: across the north ford, down the causeway past the
-    // relic, across the south ford, up the causeway again. It is near the
-    // relic while on the causeway and away while crossing a ford.
+    // A figure of eight: across the north ford out to the far bank, back and
+    // down the causeway past the relic, across the south ford out to the
+    // other bank, back and up the causeway again. It is near the relic only
+    // on the causeway (about a third of the loop); while it is out on a ford
+    // or a bank the relic is unguarded, and one ford is always clear.
     pixiuRoute: [
-      [51, 10],
+      [48, 10],
       [56, 12],
       [56, 19],
-      [51, 21],
-      [60, 21],
+      [48, 21],
+      [63, 21],
       [55, 19],
       [55, 12],
-      [60, 10],
+      [63, 10],
     ],
   };
 }

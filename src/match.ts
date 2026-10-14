@@ -16,7 +16,7 @@ import { log, logError } from "./log.ts";
 import { markOf } from "./mark.ts";
 import { sealGlyph } from "./seal.ts";
 import { publish } from "./events.ts";
-import { createMatch, MAP_IDS, MAX_TICKS, ownerOf, step, TICKS_PER_SECOND, validateCommand, viewFor } from "./sim/index.ts";
+import { BOT, createMatch, MAP_IDS, MAX_TICKS, ownerOf, step, TICKS_PER_SECOND, validateCommand, viewFor } from "./sim/index.ts";
 import type { SimState } from "./sim/index.ts";
 import type { Command, Seat, SeatView, SimEvent } from "./sim/types.ts";
 import { botCommands } from "./bot.ts";
@@ -36,8 +36,6 @@ const TICK_MS = 250;
 const FORFEIT_MS = Number(process.env.MATCH_IDLE_FORFEIT_MS ?? 5 * 60_000);
 const ABANDON_MS = Number(process.env.MATCH_ABANDON_MS ?? 10 * 60_000);
 const RATE_PER_SECOND = 10;
-const BOT_EVERY_TICKS = 4;
-const BOT_MAX_COMMANDS = 10;
 const COMMAND_LOG_MS = 2000;
 const MAX_STREAMS = 100;
 const MAX_STREAMS_PER_IP = 10;
@@ -475,10 +473,10 @@ function advance(): void {
     sendTick(views, known);
   }
 
-  if (m.bot && state.tick % BOT_EVERY_TICKS === 0 && state.winner === null) {
+  if (m.bot && state.tick % BOT.everyTicks === 0 && state.winner === null) {
     let botCmds: Command[] = [];
     try {
-      botCmds = botCommands(views[1]).slice(0, BOT_MAX_COMMANDS);
+      botCmds = botCommands(views[1]).slice(0, BOT.maxCommands);
     } catch (err) {
       logError(err, { route: "match.bot" });
     }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createMatch, JIAOLONG, PIXIU, RELIC_BONUS, viewFor, type SimEvent } from "../src/sim/index.ts";
 import { byKind, clearUnits, command, place, run } from "../src/sim/testing.ts";
 import { MAPS } from "../src/sim/map.ts";
-import { CREATURE_LINES, RULES_TEXT } from "../src/rules-text.ts";
+import { CREATURE_LINES, CREATURE_WHERE, RULES_TEXT } from "../src/rules-text.ts";
 
 const def = MAPS["scroll-1"];
 const terrainAt = (x: number, y: number) => def.terrain[y * def.width + x];
@@ -189,6 +189,28 @@ describe("貔貅 pixiu", () => {
     expect(lab.hp).toBeLessThan(lab.maxHp);
   });
 
+  it("is away from the relic for a real window every loop, so the relic can be claimed from a ford (F-4)", () => {
+    const s = fresh();
+    const loop = s.pixiuLoop;
+    const awayTiles = loop.filter((i) => relicDist(i % s.width, Math.floor(i / s.width)) > PIXIU.away).length;
+    expect(awayTiles / loop.length).toBeGreaterThanOrEqual(1 / 3);
+    // the explorer's repro, from the east bank by the north ford: starting at
+    // every point of the loop, a labourer walked to the relic claims it often
+    let claims = 0;
+    const tries = 24;
+    for (let k = 0; k < tries; k++) {
+      const t = createMatch("scroll-1", 1);
+      clearUnits(t);
+      run(t, Math.floor((k * loop.length * PIXIU.speed) / tries));
+      const lab = place(t, "labourer", 0, 60, 13);
+      const ev = command(t, 0, { type: "move", units: [lab.id], x: 56, y: 15 }, 80);
+      if (ev.some((e) => e.type === "relic.claimed")) claims++;
+    }
+    expect(claims).toBeGreaterThanOrEqual(tries / 2);
+    // the relic is the two island tiles x 55–56, y 15–16, reachable from both banks
+    expect(def.relic).toEqual([[55, 15], [56, 15], [55, 16], [56, 16]]);
+  });
+
   it("attacks units it meets on its route, then goes back to it", () => {
     const s = fresh();
     const p = byKind(s, "pixiu");
@@ -208,6 +230,17 @@ describe("rules text", () => {
       expect(line.split(/[.!?](\s|$)/).filter((x) => x.trim()).length).toBe(1);
     }
     expect(RULES_TEXT).toMatch(/east/);
+  });
+
+  it("says where each creature lives and where the relic is (F-6)", () => {
+    for (const k of Object.keys(CREATURE_LINES) as (keyof typeof CREATURE_LINES)[]) {
+      expect(RULES_TEXT).toContain(`${CREATURE_LINES[k]} Where: ${CREATURE_WHERE[k]}`);
+      expect(CREATURE_WHERE[k].split(/[.!?](\s|$)/).filter((x) => x.trim()).length).toBe(1);
+    }
+    expect(CREATURE_WHERE.nian).toMatch(/head of the river/);
+    expect(CREATURE_WHERE.qilin).toMatch(/river's mouth/);
+    const [rx, ry] = def.relic[0];
+    expect(RULES_TEXT).toContain(`x ${rx}–${rx + 1}, y ${ry}–${ry + 1}`);
     expect(RULES_TEXT).not.toMatch(/[<>]/);
   });
 });

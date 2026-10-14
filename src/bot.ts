@@ -4,7 +4,7 @@
 // the same player with different temperament (used by the soak spec).
 // It imports only types and balance numbers, never the simulation's internals.
 
-import { BUILDINGS, MAX_UNITS_PER_COMMAND } from "./sim/balance.ts";
+import { BOT, BUILDINGS, MAX_UNITS_PER_COMMAND, UNITS } from "./sim/balance.ts";
 import type { Command, SeatView, VisibleEntity } from "./sim/types.ts";
 
 export interface BotOptions {
@@ -14,7 +14,6 @@ export interface BotOptions {
   labourers?: number;
 }
 
-const MAX_COMMANDS = 6;
 // west-side coordinates (seat 1's own half) of one tile of each safe grove
 // beyond the sight of the hall, nearest first: [grove tile x, y]. Seat 0 mirrors.
 // The nian's grove (x >= 51) and the glade's (x 46..47, y >= 28) are left out.
@@ -37,8 +36,8 @@ function chunk<T>(xs: T[]): T[][] {
 }
 
 export function createBot(opts: BotOptions = {}): (view: SeatView) => Command[] {
-  const attackAt = opts.attackAt ?? 8;
-  const labourerTarget = opts.labourers ?? 11;
+  const attackAt = opts.attackAt ?? BOT.attackAt;
+  const labourerTarget = opts.labourers ?? BOT.labourers;
 
   return function bot(view: SeatView): Command[] {
     const { width: W, height: H, seat } = view;
@@ -70,17 +69,17 @@ export function createBot(opts: BotOptions = {}): (view: SeatView) => Command[] 
     };
     const hallBusy = hall.progress !== undefined;
     const wantLabourers = labourers.length + (hallBusy ? 1 : 0) < labourerTarget;
-    const needBarracks = barracks.length === 0 && labourers.length >= 6;
-    if (wantLabourers && !hallBusy && !(needBarracks && spend.grain < 200)) tryTrain(hall, "labourer", 50);
+    const needBarracks = barracks.length === 0 && labourers.length >= BOT.barracksAt;
+    if (wantLabourers && !hallBusy && !(needBarracks && spend.grain < BOT.saveForBarracks)) tryTrain(hall, "labourer", UNITS.labourer.cost);
     // a barracks shows progress only while it is training, so keep each one
     // busy: train at the idle ones, and queue a second only when grain piles up
     for (const b of barracks) {
       if (b.task === "building") continue;
-      if (b.progress === undefined || (b.progress >= 60 && spend.grain >= 300)) tryTrain(b, "spearman", 80);
+      if (b.progress === undefined || (b.progress >= 60 && spend.grain >= BOT.queueSecondGrain)) tryTrain(b, "spearman", UNITS.spearman.cost);
     }
 
     // ---- economy: the barracks ----
-    const wantBarracks = barracks.length === 0 ? labourers.length >= 6 : barracks.length === 1 && barracks[0].task !== "building" && view.grain >= 400 && labourers.length >= labourerTarget;
+    const wantBarracks = barracks.length === 0 ? labourers.length >= BOT.barracksAt : barracks.length === 1 && barracks[0].task !== "building" && view.grain >= BOT.secondBarracksGrain && labourers.length >= labourerTarget;
     if (wantBarracks && view.grain >= BUILDINGS.barracks.cost) {
       const foot = view.entities.filter((e) => e.side !== "wild" || true).map((e) => {
         const s = e.kind === "hall" ? 3 : e.kind === "barracks" ? 2 : 1;
@@ -161,7 +160,7 @@ export function createBot(opts: BotOptions = {}): (view: SeatView) => Command[] 
     // ---- the army ----
     const hallDist = (e: VisibleEntity) => cheb(e.x, e.y, hx, hy);
     const enemyUnits = foes.filter((e) => e.kind === "spearman" || e.kind === "labourer");
-    const intruders = enemyUnits.filter((e) => hallDist(e) <= 12);
+    const intruders = enemyUnits.filter((e) => hallDist(e) <= BOT.intruderRadius);
     const nearestTo = (x: number, y: number, list: VisibleEntity[]) =>
       list.slice().sort((a, b) => cheb(a.x, a.y, x, y) - cheb(b.x, b.y, x, y) || a.id - b.id)[0];
     const sendAttack = (units: VisibleEntity[], target: VisibleEntity) => {
@@ -170,10 +169,10 @@ export function createBot(opts: BotOptions = {}): (view: SeatView) => Command[] 
     const sendMove = (units: VisibleEntity[], x: number, y: number) => {
       for (const c of chunk(units.map((u) => u.id))) army.push({ type: "move", units: c, x, y });
     };
-    const rally = { x: hx + dir * 8, y: hy };
+    const rally = { x: hx + dir * BOT.rallyDist, y: hy };
 
-    const home = spears.filter((s) => hallDist(s) <= 14);
-    const away = spears.filter((s) => hallDist(s) > 14);
+    const home = spears.filter((s) => hallDist(s) <= BOT.homeRadius);
+    const away = spears.filter((s) => hallDist(s) > BOT.homeRadius);
     const soldiersSeen = foes.filter((e) => e.kind === "spearman");
     const enemyHall = foes.find((e) => e.kind === "hall");
 
@@ -183,12 +182,12 @@ export function createBot(opts: BotOptions = {}): (view: SeatView) => Command[] 
       const pool = soldiers.length > 0 ? soldiers : intruders;
       const t = nearestTo(hx, hy, pool);
       const guards = spears.filter((s) => s.task !== "attacking" || cheb(s.x, s.y, t.x, t.y) > 1);
-      if (t && guards.length > 0) sendAttack(guards.filter((s) => hallDist(s) <= 24), t);
-    } else if (away.length > 0 && away.length < 3 && soldiersSeen.length >= away.length) {
+      if (t && guards.length > 0) sendAttack(guards.filter((s) => hallDist(s) <= BOT.defendRadius), t);
+    } else if (away.length > 0 && away.length < BOT.regroupBelow && soldiersSeen.length >= away.length) {
       // regroup: the wave is nearly spent
       sendMove(away, rally.x, rally.y);
     } else {
-      const waveGo = away.length === 0 ? home.length >= attackAt : home.length >= Math.max(6, attackAt - 2);
+      const waveGo = away.length === 0 ? home.length >= attackAt : home.length >= Math.max(BOT.laterWaveAt, attackAt - 2);
       const marchers = [...away, ...(waveGo ? home : [])];
       // hold the home group at the rally point
       if (!waveGo) {
@@ -200,7 +199,7 @@ export function createBot(opts: BotOptions = {}): (view: SeatView) => Command[] 
         const cy = Math.round(marchers.reduce((a, m) => a + m.y, 0) / marchers.length);
         // retarget fighters only when a soldier is nearby; otherwise only idle ones need orders
         const prey = (m: VisibleEntity) => {
-          const near = soldiersSeen.filter((e) => cheb(e.x, e.y, m.x, m.y) <= 7);
+          const near = soldiersSeen.filter((e) => cheb(e.x, e.y, m.x, m.y) <= BOT.preyRadius);
           if (near.length > 0) return nearestTo(m.x, m.y, near);
           if (m.task !== "idle" && m.task !== "moving") return undefined;
           if (enemyHall) return enemyHall;
@@ -239,7 +238,7 @@ export function createBot(opts: BotOptions = {}): (view: SeatView) => Command[] 
     }
 
     // never poke creatures: nothing above targets a "wild" piece
-    return [...train, ...build, ...army, ...work].slice(0, MAX_COMMANDS);
+    return [...train, ...build, ...army, ...work].slice(0, BOT.maxCommands);
   };
 }
 

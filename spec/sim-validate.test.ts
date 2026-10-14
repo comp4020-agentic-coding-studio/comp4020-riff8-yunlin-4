@@ -114,4 +114,31 @@ describe("validateCommand", () => {
       expect(validateCommand(s, 0, { type: "build", units: mine, building: "barracks", x, y })).toMatchObject({ ok: false, reason: "invalid" });
     }
   });
+
+  it("says why a barracks can't go down, only ever about ground in view (F-7)", () => {
+    const { s, mine } = setup();
+    const why = (x: number, y: number) => validateCommand(s, 0, { type: "build", units: mine, building: "barracks", x, y });
+    expect(why(20, 16)).toEqual({ ok: false, reason: "invalid", detail: "not open ground in view" });
+    expect(why(108, 8)).toEqual({ ok: false, reason: "invalid", detail: "a barracks needs 2×2 open plain ground" });
+    expect(why(104, 14)).toMatchObject({ detail: expect.stringMatching(/building is in the way/) });
+    expect(why(111, 31)).toMatchObject({ detail: expect.stringMatching(/on the map/) });
+    // any fogged tile in the footprint gives the fog answer, before anything about the rest
+    expect(why(102, 6)).toEqual(why(20, 16));
+  });
+
+  it("answers the same for a footprint with a hidden enemy on it as for an empty one", () => {
+    const { s, mine } = setup();
+    const at = (x: number, y: number) => validateCommand(s, 0, { type: "build", units: mine, building: "barracks", x, y });
+    // fogged: an enemy standing there changes nothing
+    const fogged = at(60, 20);
+    place(s, "spearman", 1, 60, 20);
+    expect(at(60, 20)).toEqual(fogged);
+    // in view, a visible enemy on the footprint blocks it, and says so
+    const clear = at(100, 18);
+    expect(clear).toMatchObject({ ok: true });
+    const enemy = place(s, "labourer", 1, 101, 19);
+    expect(at(100, 18)).toMatchObject({ ok: false, detail: expect.stringMatching(/someone is standing there/) });
+    s.entities = s.entities.filter((e) => e !== enemy);
+    expect(at(100, 18)).toEqual(clear);
+  });
 });
