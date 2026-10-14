@@ -44,6 +44,7 @@ export function renderMatchPage({ rulesText, ownMark, ownGlyph }: MatchPageOptio
       </section>
 
       <section class="match-board" data-match-board hidden aria-label="The board">
+        <p class="match-first" data-match-first hidden>Select your labourers (click, or drag a box), press Gather, then click a grove. Right-click is a shortcut for orders.</p>
         <div class="match-hud" data-match-hud></div>
         <div class="match-controls" data-match-controls></div>
         <div class="match-scroller" data-match-scroller tabindex="0" role="region"
@@ -52,6 +53,7 @@ export function renderMatchPage({ rulesText, ownMark, ownGlyph }: MatchPageOptio
                   aria-label="An ink map of the land between the two halls: river, groves, hills and the pieces in view.">
           </canvas>
         </div>
+        <p class="match-legend">勞 labourer · 兵 spearman · 廳 hall · 營 barracks · solid = yours · hollow or hatched = theirs · jagged ring = creature · small pale trees = grove (number = grain left)</p>
         <ol class="match-log" aria-live="polite" aria-label="What just happened" data-match-log></ol>
       </section>
 

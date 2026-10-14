@@ -449,6 +449,56 @@ footer {
   margin: 1rem 0;
 }
 
+/* HUD, warnings and order buttons stay at the top of the viewport while the
+   map is scrolled. */
+.match-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+
+.match-alert {
+  margin: 0;
+  padding: 0.3rem 0.5rem;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: bold;
+}
+
+.match-alert[hidden] {
+  display: none;
+}
+
+.match-alert--sight {
+  background: transparent;
+  color: var(--ink);
+  border: 2px double var(--ink);
+}
+
+.match-first {
+  margin: 0 0 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--ink-soft);
+}
+
+.match-first[hidden] {
+  display: none;
+}
+
+.match-legend {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.match-board button:focus-visible,
+.match-scroller:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+
 .match-hud {
   display: flex;
   flex-wrap: wrap;

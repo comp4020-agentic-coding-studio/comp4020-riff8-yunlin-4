@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RULES_TEXT } from "../src/rules-text.ts";
 import type { Command, SeatView } from "../src/sim/types.ts";
-import { describeEvent, diffSnapshots, ownBuildingHp, renderView, seatName, snapshot, type Snapshot } from "./lib/render-view.ts";
+import { attackWarnings, describeEvent, diffSnapshots, headings as headingsOf, sightings, ownBuildingHp, renderView, seatName, snapshot, type Snapshot } from "./lib/render-view.ts";
 
 const argv = process.argv.slice(2);
 function flag(name: string): string | undefined {
@@ -23,7 +23,7 @@ const [sub = "look", ...args] = argv;
 const port = new URL(server).port || "80";
 const stateFile = join(process.env.TMPDIR ?? "/tmp", `shanhai-play-${as}-${port}.json`);
 
-interface Saved { cookie?: string; snap?: Snapshot; matchId?: number | null; lastTick?: number; bhp?: Record<number, { kind: string; hp: number; maxHp: number }> }
+interface Saved { cookie?: string; snap?: Snapshot; matchId?: number | null; seed?: number; lastTick?: number; bhp?: Record<number, { kind: string; hp: number; maxHp: number }> }
 let saved: Saved = {};
 try { saved = JSON.parse(readFileSync(stateFile, "utf8")); } catch { /* first call */ }
 const save = () => writeFileSync(stateFile, JSON.stringify(saved));
@@ -78,31 +78,38 @@ async function look(s?: any, quiet = false): Promise<void> {
   s ??= await status();
   const v: SeatView | null = s.view;
   if (!v) { console.log(say(s).join("\n")); return; }
-  const out = renderView(v, { around: around === undefined ? undefined : Number(around) });
+  const same = saved.matchId === s.matchId && saved.seed === s.seed;
+  const prev = same && saved.snap && saved.snap.tick <= v.tick ? saved.snap : undefined;
+  const heads = headingsOf(prev, v);
+  const out = renderView(v, { around: around === undefined ? undefined : Number(around), headings: heads });
   const idle = v.entities.filter((e) => e.side === v.seat && e.kind === "labourer" && e.task === "idle").length;
   out[0] += `${idle > 0 ? ` · ${idle} idle labourer${idle === 1 ? "" : "s"}` : ""} · match ${s.matchId} · ${s.mapId} · seed ${s.seed}`;
   const now = snapshot(v);
-  const same = saved.matchId === s.matchId;
-  const prev = same ? saved.snap : undefined;
   const bhp = ownBuildingHp(v);
   const warn: string[] = [];
   for (const [id, b] of Object.entries(bhp)) {
     const was = same ? saved.bhp?.[Number(id)] : undefined;
     if (was && b.hp < was.hp) warn.push(`YOUR ${b.kind.toUpperCase()} ${id} IS UNDER ATTACK: ${b.hp}/${b.maxHp} (−${was.hp - b.hp})`);
   }
+  const lastTick = same && saved.snap && saved.snap.tick <= v.tick ? (saved.lastTick ?? -1) : -1;
+  const evs: any[] = (s.recentEvents ?? []).filter((e: any) => e.tick > lastTick);
+  warn.push(...attackWarnings(prev, now, evs, v.seat), ...sightings(prev, v));
+  // A unit that vanished without a death event in the log (older than the
+  // server's recent-event window) is still reported, from the snapshot diff.
+  const told = new Set(evs.filter((e) => e.type === "unit.died").map((e) => e.unit));
+  const gone = Object.entries(prev?.ownUnits ?? {}).filter(([id]) => !(id in (now.ownUnits ?? {})) && !told.has(Number(id)));
   out.push(...warn);
   out.push("events since your last look:");
-  const lastTick = same ? (saved.lastTick ?? -1) : -1;
-  const evs: any[] = (s.recentEvents ?? []).filter((e: any) => e.tick > lastTick);
   const lines = evs.map((e) => describeEvent(e, v.seat)).filter((x): x is string => x !== null);
   const d = prev ? diffSnapshots(prev, now) : [];
-  const all = [...lines, ...d];
+  const lost = gone.map(([id, u]) => `your ${u.kind} ${id} is gone (last seen at (${u.x},${u.y}); the server's event window no longer holds why)`);
+  const all = [...lines, ...lost, ...d];
   out.push(...(all.length ? all.map((x) => `  ${x}`) : [prev ? "  nothing new" : "  (first look)"]));
   const maxTick = Math.max(lastTick, ...evs.map((e) => e.tick));
   saved.lastTick = maxTick;
   saved.bhp = bhp;
   if (s.status === "ended") out.push(...say(s));
-  saved.snap = now; saved.matchId = s.matchId; save();
+  saved.snap = now; saved.matchId = s.matchId; saved.seed = s.seed; save();
   if (!quiet) console.log(out.join("\n"));
 }
 

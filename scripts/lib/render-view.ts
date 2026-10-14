@@ -70,7 +70,7 @@ function ids(es: VisibleEntity[]): string {
   return es.map((e) => `${e.id}(${e.x},${e.y})${e.hp < e.maxHp ? ` hp${e.hp}` : ""}`).join(" ");
 }
 
-export function renderView(view: SeatView, opts: { around?: number } = {}): string[] {
+export function renderView(view: SeatView, opts: { around?: number; headings?: Record<number, string> } = {}): string[] {
   const out: string[] = [];
   out.push(
     `tick ${view.tick} (${clock(view.tick)}) · grain ${view.grain} · pop ${view.pop}/${view.popCap} · you: ${seatName(view.seat)} (seat ${view.seat})`,
@@ -97,7 +97,7 @@ export function renderView(view: SeatView, opts: { around?: number } = {}): stri
     out.push("in view, not yours:");
     for (const e of others) {
       const who = e.side === "wild" ? "creature" : "enemy";
-      out.push(`  ${who} ${e.kind} ${e.id} at (${e.x},${e.y}) ${e.hp}/${e.maxHp}hp ${e.task}`);
+      out.push(`  ${who} ${e.kind} ${e.id} at (${e.x},${e.y}) ${e.hp}/${e.maxHp}hp ${e.task}${opts.headings?.[e.id] ? ` · heading ${opts.headings[e.id]}` : ""}`);
     }
   }
   if (view.groves.length) out.push(`groves in view: ${view.groves.map(([x, y, g]) => `(${x},${y}) ${g}`).join(" ")}`);
@@ -113,12 +113,18 @@ export interface Snapshot {
   done: number[]; // own completed building ids
   seen: Record<number, string>; // visible non-own ids -> "enemy spearman" etc.
   bhp?: Record<number, { kind: string; hp: number; maxHp: number }>;
+  ownUnits?: Record<number, { kind: string; hp: number; x: number; y: number }>; // own labourers/spearmen
+  soldiers?: number[]; // enemy spearman ids in view
+  creatures?: Record<number, { kind: string; x: number; y: number }>;
 }
 
 export function snapshot(v: SeatView): Snapshot {
-  const s: Snapshot = { tick: v.tick, grain: v.grain, own: {}, done: [], seen: {} };
+  const s: Snapshot = { tick: v.tick, grain: v.grain, own: {}, done: [], seen: {}, ownUnits: {}, soldiers: [], creatures: {} };
   for (const e of v.entities) {
+    if (e.side === "wild") s.creatures![e.id] = { kind: e.kind, x: e.x, y: e.y };
+    else if (e.side !== v.seat && e.kind === "spearman") s.soldiers!.push(e.id);
     if (e.side === v.seat) {
+      if (e.kind === "labourer" || e.kind === "spearman") s.ownUnits![e.id] = { kind: e.kind, hp: e.hp, x: e.x, y: e.y };
       s.own[e.id] = e.kind;
       if ((e.kind === "hall" || e.kind === "barracks") && e.progress === undefined) s.done.push(e.id);
       else if ((e.kind === "hall" || e.kind === "barracks") && e.task !== "building" && e.task !== "training") s.done.push(e.id);
@@ -169,4 +175,52 @@ export function ownBuildingHp(v: SeatView): Record<number, { kind: string; hp: n
   const o: Record<number, { kind: string; hp: number; maxHp: number }> = {};
   for (const e of v.entities) if (e.side === v.seat && (e.kind === "hall" || e.kind === "barracks")) o[e.id] = { kind: e.kind, hp: e.hp, maxHp: e.maxHp };
   return o;
+}
+
+// ---- warnings (T-16) and heading (T-17) ----
+
+const AREA = 10; // tiles: one warning line per 10x10 area
+const areaKey = (x: number, y: number) => `${Math.floor(x / AREA)},${Math.floor(y / AREA)}`;
+
+// "Your labourers are under attack near (92,2)": own units that lost hp since
+// the last snapshot, or died to an enemy or a creature in the new events.
+export function attackWarnings(prev: Snapshot | undefined, now: Snapshot, events: SimEvent[], me: number): string[] {
+  const hit = new Map<string, { kinds: Set<string>; x: number; y: number }>();
+  const note = (kind: string, x: number, y: number) => {
+    const k = areaKey(x, y);
+    const a = hit.get(k) ?? { kinds: new Set(), x, y };
+    a.kinds.add(kind);
+    hit.set(k, a);
+  };
+  for (const [id, u] of Object.entries(now.ownUnits ?? {})) {
+    const was = prev?.ownUnits?.[Number(id)];
+    if (was && u.hp < was.hp) note(u.kind, u.x, u.y);
+  }
+  for (const e of events) if (e.type === "unit.died" && e.side === me && e.kind !== "hall" && e.kind !== "barracks") note(e.kind, e.x, e.y);
+  return [...hit.values()].map((a) => `YOUR ${[...a.kinds].map((k) => k + "s").join(" AND ").toUpperCase()} ARE UNDER ATTACK near (${a.x},${a.y})`);
+}
+
+// "Enemy spearmen sighted near (28,10) — 7 of them": enemy soldiers in view
+// now that were not in view at the last snapshot.
+export function sightings(prev: Snapshot | undefined, v: SeatView): string[] {
+  const before = new Set(prev?.soldiers ?? []);
+  const fresh = v.entities.filter((e) => e.side !== v.seat && e.side !== "wild" && e.kind === "spearman" && !before.has(e.id));
+  const groups = new Map<string, VisibleEntity[]>();
+  for (const e of fresh) groups.set(areaKey(e.x, e.y), [...(groups.get(areaKey(e.x, e.y)) ?? []), e]);
+  return [...groups.values()].map((g) => `Enemy spearmen sighted near (${g[0].x},${g[0].y}) — ${g.length} of them`);
+}
+
+const COMPASS = ["east", "south-east", "south", "south-west", "west", "north-west", "north", "north-east"];
+
+// Which way each creature in view moved since the last snapshot (y grows southward).
+export function headings(prev: Snapshot | undefined, v: SeatView): Record<number, string> {
+  const out: Record<number, string> = {};
+  for (const e of v.entities) {
+    if (e.side !== "wild") continue;
+    const was = prev?.creatures?.[e.id];
+    if (!was) out[e.id] = "unknown (first sighting)";
+    else if (was.x === e.x && was.y === e.y) out[e.id] = "nowhere (still)";
+    else out[e.id] = COMPASS[(Math.round(Math.atan2(e.y - was.y, e.x - was.x) / (Math.PI / 4)) + 8) % 8];
+  }
+  return out;
 }

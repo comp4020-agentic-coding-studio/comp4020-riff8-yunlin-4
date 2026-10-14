@@ -50,8 +50,17 @@ const hud = document.querySelector("[data-match-hud]");
 const controls = document.querySelector("[data-match-controls]");
 const scroller = document.querySelector("[data-match-scroller]");
 const canvas = document.querySelector("[data-match-canvas]");
+const firstEl = document.querySelector("[data-match-first]");
 const logEl = document.querySelector("[data-match-log]");
 const ctx = canvas.getContext("2d");
+
+// HUD, alerts and order buttons share one sticky band at the top of the
+// viewport, so the status and warnings stay in sight while the map is scrolled.
+const sticky = el("div", { className: "match-sticky" });
+const attackEl = el("p", { className: "match-alert", role: "alert", hidden: "" });
+const sightEl = el("p", { className: "match-alert match-alert--sight", role: "status", hidden: "" });
+hud.before(sticky);
+sticky.append(attackEl, sightEl, hud, controls);
 
 let status = null; // the status object, without view
 let view = null; // the latest SeatView
@@ -60,6 +69,14 @@ let mode = null; // null | "order" | "gather" | "build"
 let log = [];
 let sealedFor = null; // matchId whose chronicle this page has sealed
 let scrolledFor = null; // matchId whose hall the scroller has been brought to
+let ordered = false; // has this page sent an order yet this match
+let boardShownFor = null; // matchId whose map has been scrolled into view
+let watched = null; // what the last view showed, for warnings and headings
+const ALERT_TICKS = 40;
+const AREA = 10; // tiles: one warning per 10x10 area
+const areaKey = (x, y) => `${Math.floor(x / AREA)},${Math.floor(y / AREA)}`;
+const alerts = { attack: new Map(), sight: new Map() }; // area -> { text, tick }
+const heading = new Map(); // creature id -> { x, y, dx, dy }
 
 function say(message) {
   messageEl.textContent = message ?? "";
@@ -109,6 +126,11 @@ function applyStatus(next) {
     mode = null;
     log = [];
     view = null;
+    watched = null;
+    ordered = false;
+    alerts.attack.clear();
+    alerts.sight.clear();
+    heading.clear();
   }
   status = { ...next };
   if ("view" in next) {
@@ -129,7 +151,11 @@ function renderStatus() {
   const seated = s.you === 0 || s.you === 1;
 
   if (s.status === "none") {
-    statusEl.append(p("No match is being played."), unroll());
+    statusEl.append(
+      p("No match is being played."),
+      unroll(),
+      el("p", { className: "match-note" }, "You'll take the east seat; then wait for a friend or play the computer."),
+    );
   } else if (s.status === "waiting" && s.you === 0) {
     statusEl.append(
       p("Waiting for a second player. Send them this page, or"),
@@ -141,13 +167,21 @@ function renderStatus() {
       button("Take the west seat", () => act("/api/match/join")),
     );
   } else if (s.status === "playing" && !seated) {
-    statusEl.append(p("A match is under way."));
+    statusEl.append(
+      p(
+        "A match is under way between two other seals. If one of them was you in another browser, that seat forfeits after five minutes without orders, and the scroll is free again.",
+      ),
+    );
   } else if (s.status === "playing") {
     statusEl.append(p(`You hold the ${SEAT_NAME[s.you]} seat. Read the land right to left.`));
   } else if (s.status === "ended" && seated && s.result) {
     statusEl.append(...renderResult(s), unroll());
   } else {
-    statusEl.append(p("The last match has ended."), unroll());
+    statusEl.append(
+      p("The last match has ended."),
+      unroll(),
+      el("p", { className: "match-note" }, "You'll take the east seat; then wait for a friend or play the computer."),
+    );
   }
   if (s.manualTicks && seated && s.status === "playing") {
     statusEl.append(button("Step 20", () => act("/api/match/step", { ticks: 20 }), "quiet"));
@@ -209,16 +243,73 @@ function renderBoard() {
   const seated = status && (status.you === 0 || status.you === 1);
   const show = seated && view && (status.status === "playing" || status.status === "ended");
   board.hidden = !show;
+  firstEl.hidden = !(show && status.status === "playing" && !ordered);
   if (!show) return;
   if (!terrain || canvas.width !== Math.round(view.width * T * Math.min(2, devicePixelRatio || 1))) sizeCanvas();
   // Drop anything selected that has died or gone.
   const own = new Set(view.entities.filter((e) => e.side === view.seat).map((e) => e.id));
   for (const id of selected) if (!own.has(id)) selected.delete(id);
+  watch();
   updateTerrain();
   draw();
   renderHud();
   renderControls();
   if (scrolledFor !== status.matchId) bringHallIntoView();
+  if (boardShownFor !== status.matchId) {
+    boardShownFor = status.matchId;
+    board.scrollIntoView({ block: "start" });
+  }
+}
+
+// What changed since the last view: own units that lost hp, enemy soldiers
+// newly in view, which way each creature last moved. Deaths come with the
+// events frame (addEvents), which follows the view.
+function watch() {
+  const prev = watched?.matchId === status.matchId ? watched : null;
+  const now = { matchId: status.matchId, tick: view.tick, hp: new Map(), soldiers: new Set() };
+  const hurt = new Map(); // area -> { kinds, x, y }
+  for (const e of view.entities) {
+    if (e.side === view.seat && !BUILDINGS.has(e.kind)) {
+      now.hp.set(e.id, e.hp);
+      const was = prev?.hp.get(e.id);
+      if (was !== undefined && e.hp < was) {
+        const a = hurt.get(areaKey(e.x, e.y)) ?? { kinds: new Set(), x: e.x, y: e.y };
+        a.kinds.add(e.kind);
+        hurt.set(areaKey(e.x, e.y), a);
+      }
+    } else if (e.side !== view.seat && e.side !== "wild" && e.kind === "spearman") now.soldiers.add(e.id);
+    if (e.side === "wild") {
+      const h = heading.get(e.id);
+      if (!h) heading.set(e.id, { x: e.x, y: e.y, dx: 0, dy: 0 });
+      else if (h.x !== e.x || h.y !== e.y) Object.assign(h, { dx: e.x - h.x, dy: e.y - h.y, x: e.x, y: e.y });
+    }
+  }
+  for (const [k, a] of hurt) attacked(k, a.kinds, a.x, a.y);
+  const fresh = new Map();
+  for (const e of view.entities) {
+    if (e.side !== view.seat && e.side !== "wild" && e.kind === "spearman" && !prev?.soldiers.has(e.id)) {
+      const g = fresh.get(areaKey(e.x, e.y)) ?? { n: 0, x: e.x, y: e.y };
+      g.n++;
+      fresh.set(areaKey(e.x, e.y), g);
+    }
+  }
+  for (const [k, g] of fresh) {
+    if (alerts.sight.has(k) && view.tick - alerts.sight.get(k).tick <= ALERT_TICKS) continue;
+    const text = `Enemy spearmen sighted near (${g.x},${g.y}) — ${g.n} of them`;
+    alerts.sight.set(k, { text, tick: view.tick });
+    pushLog(`${clock(view.tick)} ${text}`);
+  }
+  watched = now;
+}
+
+// One line per area: a fresh hit in an area already warned about within the
+// last few seconds only refreshes the alert, it isn't logged again.
+function attacked(key, kinds, x, y) {
+  const text = `Your ${[...kinds].map((k) => `${k}s`).join(" and ")} are under attack near (${x},${y})`;
+  const old = alerts.attack.get(key);
+  const tick = view?.tick ?? 0;
+  alerts.attack.set(key, { text, tick });
+  if (!old || tick - old.tick > ALERT_TICKS) pushLog(`${clock(tick)} ${text}`);
 }
 
 // A tiny deterministic hash so each tile's marks are the same every redraw.
@@ -293,18 +384,21 @@ function drawTile(t, x, y, c) {
       }
     }
   } else if (code === "g") {
-    // Ni Zan's trees: a thin trunk, a few horizontal dabs for leaves.
+    // Ni Zan's trees: a thin trunk, a few horizontal dabs for leaves. Pale
+    // and fine, so a grove never reads as a creature.
+    const pale = `rgba(${INK}, ${a * 0.5})`;
+    t.strokeStyle = pale;
     const n = 1 + Math.floor(r(1) * 2);
     for (let k = 0; k < n; k++) {
       const tx = px + T * (0.3 + 0.4 * k + (r(k + 2) - 0.5) * 0.15);
       const base = py + T * 0.88;
       const top = py + T * (0.25 + r(k + 5) * 0.15);
-      t.lineWidth = 1.1;
+      t.lineWidth = 0.8;
       t.beginPath();
       t.moveTo(tx, base);
       t.quadraticCurveTo(tx + 1.5, (base + top) / 2, tx - 0.5, top);
       t.stroke();
-      t.lineWidth = 1.6;
+      t.lineWidth = 1;
       for (let d = 0; d < 4; d++) {
         const dy = top + d * 2.6;
         const dx = tx + (r(k * 10 + d) - 0.5) * 6;
@@ -398,15 +492,47 @@ function drawEntity(e) {
   let half = T * 0.5;
 
   if (CREATURES.has(e.kind)) {
-    half = T * 0.95;
+    half = T * 1.05;
     const asleep = e.task === "asleep";
+    // A dark wash behind, then a thick jagged ring round a big glyph.
+    const wash = c.createRadialGradient(cx, cy, half * 0.6, cx, cy, half * 1.7);
+    wash.addColorStop(0, `rgba(${INK}, ${asleep ? 0.3 : 0.5})`);
+    wash.addColorStop(1, `rgba(${INK}, 0)`);
+    c.fillStyle = wash;
+    c.beginPath();
+    c.arc(cx, cy, half * 1.7, 0, Math.PI * 2);
+    c.fill();
     c.fillStyle = PAPER;
-    jaggedRing(c, cx, cy, half, 9);
+    jaggedRing(c, cx, cy, half, 11);
     c.fill();
     c.strokeStyle = ink;
-    c.lineWidth = asleep ? 1.5 : 2.6;
+    c.lineWidth = asleep ? 2.4 : 4;
     c.stroke();
-    glyph(c, GLYPHS[e.kind], cx, cy, T * 1.0, ink, "bold");
+    glyph(c, GLYPHS[e.kind], cx, cy, T * 1.3, ink, "bold");
+    const h = e.kind === "pixiu" ? heading.get(e.id) : null;
+    if (h && (h.dx || h.dy)) {
+      // An ink arrow from its rim toward where it last moved.
+      const len = Math.hypot(h.dx, h.dy);
+      const ux = h.dx / len;
+      const uy = h.dy / len;
+      const x0 = cx + ux * (half + 2);
+      const y0 = cy + uy * (half + 2);
+      const x1 = cx + ux * (half + 16);
+      const y1 = cy + uy * (half + 16);
+      c.strokeStyle = ink;
+      c.fillStyle = ink;
+      c.lineWidth = 3;
+      c.beginPath();
+      c.moveTo(x0, y0);
+      c.lineTo(x1, y1);
+      c.stroke();
+      c.beginPath();
+      c.moveTo(x1 + ux * 6, y1 + uy * 6);
+      c.lineTo(x1 - uy * 5, y1 + ux * 5);
+      c.lineTo(x1 + uy * 5, y1 - ux * 5);
+      c.closePath();
+      c.fill();
+    }
   } else if (BUILDINGS.has(e.kind)) {
     half = T * 0.85;
     const building = e.progress !== undefined && e.task === "building";
@@ -419,11 +545,30 @@ function drawEntity(e) {
       c.fillStyle = PAPER;
       c.fillRect(cx - half, cy - half, s, s);
       c.strokeStyle = ink;
-      c.lineWidth = own ? 1.5 : 2.4;
+      if (!own) {
+        // Enemy buildings are hatched: diagonal ink lines, a paper disc under the glyph.
+        c.save();
+        c.beginPath();
+        c.rect(cx - half, cy - half, s, s);
+        c.clip();
+        c.lineWidth = 1.4;
+        c.beginPath();
+        for (let k = -s; k < s; k += 5) {
+          c.moveTo(cx - half + k, cy + half);
+          c.lineTo(cx - half + k + s, cy - half);
+        }
+        c.stroke();
+        c.restore();
+        c.fillStyle = PAPER;
+        c.beginPath();
+        c.arc(cx, cy, T * 0.62, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.lineWidth = own ? 1.5 : 2.6;
       if (building) c.setLineDash([3, 3]);
       c.strokeRect(cx - half, cy - half, s, s);
       c.setLineDash([]);
-      if (!own) c.strokeRect(cx - half + 3, cy - half + 3, s - 6, s - 6);
+      if (!own) c.strokeRect(cx - half + 4, cy - half + 4, s - 8, s - 8);
       glyph(c, GLYPHS[e.kind], cx, cy, T * 1.1, ink);
     }
     if (e.progress !== undefined) {
@@ -447,16 +592,24 @@ function drawEntity(e) {
       c.fill();
     }
   } else {
+    // Enemy: a hollow square with a thick double outline.
+    half = T * 0.56;
     c.fillStyle = PAPER;
     c.fillRect(cx - half, cy - half, half * 2, half * 2);
     c.strokeStyle = ink;
-    c.lineWidth = 1.8;
+    c.lineWidth = 2.6;
     c.strokeRect(cx - half, cy - half, half * 2, half * 2);
-    glyph(c, GLYPHS[e.kind], cx, cy, T * 0.72, ink);
+    c.lineWidth = 1.4;
+    c.strokeRect(cx - half + 4, cy - half + 4, half * 2 - 8, half * 2 - 8);
+    glyph(c, GLYPHS[e.kind], cx, cy, T * 0.6, ink, "bold");
   }
 
   if (e.side === 0 || e.side === 1) {
-    glyph(c, SIDE_GLYPH[e.side], cx + half + 1, cy - half - 1, 8, `rgba(${INK}, 0.8)`);
+    const mx = cx + half + 1;
+    const my = cy - half - 1;
+    c.fillStyle = PAPER;
+    c.fillRect(mx - 6.5, my - 6.5, 13, 13);
+    glyph(c, SIDE_GLYPH[e.side], mx, my, 12, ink, "bold");
   }
   if (e.hp < e.maxHp) {
     const w = half * 2;
@@ -483,10 +636,10 @@ function draw() {
   ctx.drawImage(terrain, 0, 0);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   for (const [x, y, amount] of view.groves) {
-    ctx.font = `9px Georgia, serif`;
+    ctx.font = `7.5px Georgia, serif`;
     ctx.textAlign = "right";
     ctx.textBaseline = "bottom";
-    ctx.fillStyle = `rgba(${INK}, 0.55)`;
+    ctx.fillStyle = `rgba(${INK}, 0.32)`;
     ctx.fillText(String(amount), x * T + T - 1, y * T + T);
   }
   // Buildings under units, creatures on top.
@@ -530,7 +683,10 @@ let attackedAt = -1e9;
 function renderHud() {
   const hall = ownPieces((e) => e.kind === "hall")[0];
   if (hall) {
-    if (hallHp && hallHp[0] === status.matchId && hall.hp < hallHp[1]) attackedAt = view.tick;
+    if (hallHp && hallHp[0] === status.matchId && hall.hp < hallHp[1]) {
+      if (view.tick - attackedAt > ALERT_TICKS) pushLog(`${clock(view.tick)} Your hall is under attack — ${hall.hp} of ${hall.maxHp}`);
+      attackedAt = view.tick;
+    }
     hallHp = [status.matchId, hall.hp];
   }
   const idle = ownPieces((e) => e.kind === "labourer" && e.task === "idle");
@@ -558,9 +714,20 @@ function renderHud() {
       }, "quiet"),
     );
   }
-  if (hall && view.tick - attackedAt <= 40) {
-    hud.append(el("span", { className: "match-hud-item", role: "status" }, `Your hall is under attack — ${hall.hp} of ${hall.maxHp}`));
-  }
+  renderAlerts(hall);
+}
+
+function renderAlerts(hall) {
+  const live = (map) => [...map.values()].filter((a) => view.tick - a.tick <= ALERT_TICKS && view.tick >= a.tick);
+  const lines = live(alerts.attack).map((a) => a.text);
+  if (hall && view.tick - attackedAt <= ALERT_TICKS) lines.unshift(`Your hall is under attack — ${hall.hp} of ${hall.maxHp}`);
+  const set = (node, text) => {
+    // Only touch the text when it changes, so a screen reader isn't re-told.
+    if (node.textContent !== text) node.textContent = text;
+    node.hidden = !text;
+  };
+  set(attackEl, lines.slice(0, 2).join(" · "));
+  set(sightEl, live(alerts.sight).map((a) => a.text).slice(0, 2).join(" · "));
 }
 
 function setMode(next) {
@@ -598,8 +765,12 @@ function renderControls() {
     ),
   );
   if (mode) {
-    const hint = { order: "Choose a place to go or a piece to attack.", gather: "Choose a grove.", build: "Choose where to build." }[mode];
-    controls.append(el("span", { className: "match-hint" }, hint));
+    const hint = {
+      order: "Now click where to go, or an enemy to attack",
+      gather: "Now click a grove",
+      build: "Now click open ground for the barracks",
+    }[mode];
+    controls.append(el("span", { className: "match-hint", role: "status" }, `${hint} (Escape or the button again to cancel)`));
   }
 }
 
@@ -609,6 +780,10 @@ function ids(pieces) {
 
 async function command(cmd) {
   const { ok, data } = await post("/api/match/command", cmd);
+  if (ok) {
+    ordered = true;
+    firstEl.hidden = true;
+  }
   say(ok ? "" : (data.message ?? "That order wasn't taken."));
 }
 
@@ -772,7 +947,7 @@ function describe(ev) {
     case "build.done":
       return ev.seat === me ? `${cap(name(ev.kind))} finished` : `The enemy finished a ${name(ev.kind)}`;
     case "unit.trained":
-      return ev.seat === me ? `New ${name(ev.kind)} ${ev.unit}` : `The enemy trained a ${name(ev.kind)}`;
+      return ev.seat === me ? `A new ${name(ev.kind)} (${ev.unit}) is ready` : `The enemy trained a ${name(ev.kind)}`;
     case "creature.aggro":
       return ev.targetSeat === me ? `The ${name(ev.kind)} turned on your unit ${ev.target}` : `The ${name(ev.kind)} has turned on the enemy`;
     case "relic.claimed":
@@ -786,13 +961,22 @@ function describe(ev) {
 
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
-function addEvents(events) {
-  for (const ev of events) {
-    const text = describe(ev);
-    if (text) log.push(`${clock(ev.tick)} ${text}`);
-  }
+function pushLog(line) {
+  log.push(line);
   log = log.slice(-6);
   logEl.replaceChildren(...log.map((line) => el("li", {}, line)));
+}
+
+function addEvents(events) {
+  const me = view?.seat ?? status?.you;
+  for (const ev of events) {
+    const text = describe(ev);
+    if (text) pushLog(`${clock(ev.tick)} ${text}`);
+    if (ev.type === "unit.died" && ev.side === me && !BUILDINGS.has(ev.kind) && view) {
+      attacked(areaKey(ev.x, ev.y), new Set([ev.kind]), ev.x, ev.y);
+    }
+  }
+  if (view) renderAlerts(ownPieces((e) => e.kind === "hall")[0]);
 }
 
 // ---- the stream ----
