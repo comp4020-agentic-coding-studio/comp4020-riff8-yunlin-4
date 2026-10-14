@@ -78,18 +78,22 @@ know whose piece it was.
 - `match.create` `{ match, seat: 0 }`
 - `match.join` `{ match, seat: 1 }` · `match.bot` `{ match }` (who = seat 0, who asked for the bot)
 - `match.start` `{ match, map, seed, east, west }` (east/west are marks, or `"bot"`)
-- `command` `{ match, tick, seat, type, units }` (units = count, never the ids).
-  Aggregated: at most one line per seat per command type per 2 s, with
-  `n` = how many commands of that type were folded in and `units` their total.
+- `command` `{ match, tick, seat, type, unit?, n, units }` (units = count, never the ids).
+  Aggregated: at most one line per seat per command type (and, for `train`, per
+  unit kind: `unit`) per 2 s, with `n` = how many commands were folded in and
+  `units` the total units they named (0 for train).
 - `build.start` `{ match, tick, seat, kind, building }` · `build.done` same
 - `unit.trained` `{ match, tick, seat, kind, unit }`
-- `creature.aggro` `{ match, tick, creature: "nian"|..., target: <unit id>, targetSeat, owner: <mark of targetSeat> }` (who `"-"`)
+- `creature.aggro` `{ match, tick, creature: "nian"|..., target: <unit id>, targetKind, targetSeat, owner: <mark of targetSeat> }` (who `"-"`)
 - `unit.died` `{ match, tick, seat | "wild", kind, unit, cause: "soldier"|"creature", by: <kind>, bySeat, owner: <mark of the dead piece's seat> }`
   Aggregated per tick and cause: `count` when several die together.
 - `relic.claimed` `{ match, tick, seat, grain }`
 - `match.forfeit` `{ match, tick, seat, why: "idle"|"chose" }`
 - `match.end` `{ match, ticks, winner: <mark>|"bot"|null, winnerSeat, reason, east, west }`
 - `chronicle.seal` `{ match, colophon }`
-- `denied` `{ reason, route, owner?, match?, type? }` — `owner` is the mark of whose
+- `denied` `{ reason, route, owner?, match?, type?, seat?, unit?, building?, detail? }` —
+  for a refused command, `seat`, `unit` (a known unit kind, train) and `building`
+  (`barracks`, build) come from the parsed command only, and `detail` is the
+  server's own refusal text (at most 120 characters), never user text; `owner` is the mark of whose
   unit/seat it was, when the refusal is about ownership (`not-yours` names the
   true owner in the log only, never in the response).

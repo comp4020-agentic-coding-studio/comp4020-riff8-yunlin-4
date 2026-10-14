@@ -22,15 +22,44 @@ it("narrates a whole little match", () => {
   const out = match.map((l) => narrateLine(l, mem));
   expect(out[0]).toBe("14:02:19 鑑·3fa9c2 created a match and took the east seat");
   expect(out[1]).toContain("called in the bot");
-  expect(out[2]).toContain("鑑·3fa9c2 in the east against the bot in the west");
+  expect(out[2]).toContain("鑑·3fa9c2 holds the east seat, the bot the west; creatures (年 蛟龍 麒麟 貔貅) belong to neither");
   expect(out[3]).toBe("14:02:19 鑑·3fa9c2 (east) ordered 6 units to move");
-  expect(out[4]).toContain("gave 3 move orders to 14 units");
-  expect(out[5]).toContain("nian");
-  expect(out[5]).toContain("鑑·3fa9c2");
-  expect(out[6]).toBe("14:02:19 a 蛟龍 jiaolong took 3 of 鑑·3fa9c2's labourers");
+  expect(out[4]).toContain("sent move orders 3 times (14 units named in all)");
+  expect(out[5]).toContain("年 nian (a creature, no one's side) attacked 鑑·3fa9c2 (east)'s unit 14");
+  expect(out[6]).toBe("14:02:19 3 of 鑑·3fa9c2 (east)'s labourers were killed by the 蛟龍 jiaolong");
   expect(out[7]).toContain("fell to 鑑·3fa9c2 (east)'s spearman");
   expect(out[8]).toContain("賞·77c1a0 tried to command a unit that is not theirs (it is 鑑·3fa9c2's): refused");
-  expect(out[9]).toContain("9m 30s (2280 ticks at 4 a second): 鑑·3fa9c2 (east) won by taking the hall");
+  expect(out[9]).toContain("9m 30s of game time (2280 ticks at 4 a second): 鑑·3fa9c2 (east) won by taking the hall");
+});
+
+it("shows game time, tags sides, and says what was tried", () => {
+  const mem = newMemory();
+  const n = (o: Record<string, unknown>) => narrateLine(j(o), mem);
+  n({ event: "match.start", match: 1, map: "scroll-1", east: "守·57a0ee", west: "bot" });
+  expect(n({ event: "match.start", match: 2, map: "scroll-1", east: "守·57a0ee", west: "bot" })).toContain("in the east against");
+  expect(n({ event: "build.done", who: "守·57a0ee", match: 1, tick: 533, seat: 0, kind: "barracks" })).toBe(
+    "14:02:19 [2:13] 守·57a0ee (east) finished building a barracks",
+  );
+  expect(n({ event: "chronicle.seal", match: 1, colophon: 3 })).toBe("14:02:19 the chronicle of match 1 was sealed as colophon 3");
+  expect(n({ event: "denied", who: "守·57a0ee", reason: "grain", route: "POST /api/match/command", match: 1, type: "train", seat: 0, unit: "spearman" })).toContain(
+    "守·57a0ee (east) tried to train a spearman but couldn't afford it: refused",
+  );
+  expect(
+    n({ event: "denied", who: "守·57a0ee", reason: "invalid", route: "x", match: 1, type: "build", seat: 0, building: "barracks", detail: "a barracks needs 2×2 open plain ground" }),
+  ).toContain("tried to build a barracks where it can't stand (a barracks needs 2×2 open plain ground): refused");
+  expect(n({ event: "command", who: "守·57a0ee", match: 1, tick: 4, seat: 0, type: "train", unit: "spearman", n: 2, units: 0 })).toContain("queued 2 spearmen at the barracks");
+  expect(n({ event: "command", who: "守·57a0ee", match: 1, tick: 4, seat: 0, type: "train", unit: "labourer", n: 1, units: 0 })).toContain("queued a labourer at the hall");
+  expect(n({ event: "command", who: "守·57a0ee", match: 1, tick: 4, seat: 0, type: "attack", n: 10, units: 36 })).toContain("sent attack orders 10 times (36 units named in all)");
+  expect(n({ event: "creature.aggro", match: 1, tick: 8, creature: "nian", target: 22, targetKind: "labourer", targetSeat: 0, owner: "守·57a0ee" })).toContain(
+    "attacked 守·57a0ee (east)'s labourer 22",
+  );
+  expect(n({ event: "unit.died", match: 1, tick: 9, seat: "wild", kind: "pixiu", unit: 5, cause: "soldier", by: "spearman", bySeat: 1, owner: "wild" })).toContain("a 貔貅 pixiu fell to the bot (west)'s spearman");
+  expect(n({ event: "unit.died", match: 1, tick: 9, seat: 1, kind: "spearman", unit: 25, cause: "creature", by: "pixiu", owner: "bot" })).toContain(
+    "the bot (west)'s spearman 25 was killed by the 貔貅 pixiu",
+  );
+  expect(n({ event: "unit.died", match: 1, tick: 9, seat: 0, kind: "spearman", unit: 25, cause: "soldier", by: "spearman", bySeat: 1, owner: "守·57a0ee" })).toContain(
+    "守·57a0ee (east)'s spearman 25 fell to the bot (west)'s spearman",
+  );
 });
 
 it("handles Fly prefixes, pass-through and quiet", () => {

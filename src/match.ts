@@ -16,7 +16,7 @@ import { log, logError } from "./log.ts";
 import { markOf } from "./mark.ts";
 import { sealGlyph } from "./seal.ts";
 import { publish } from "./events.ts";
-import { BOT, createMatch, MAP_IDS, MAX_TICKS, ownerOf, step, TICKS_PER_SECOND, validateCommand, viewFor } from "./sim/index.ts";
+import { BOT, createMatch, MAP_IDS, MAX_TICKS, ownerOf, step, TICKS_PER_SECOND, UNITS, validateCommand, viewFor } from "./sim/index.ts";
 import type { SimState } from "./sim/index.ts";
 import type { Command, Seat, SeatView, SimEvent } from "./sim/types.ts";
 import { botCommands } from "./bot.ts";
@@ -350,7 +350,12 @@ export function command(token: string, who: string, raw: Record<string, unknown>
       return { status: 422, body: NOT_YOURS, deny: { reason: "not-yours", extra: { match: m.id, type, owner: trueOwner(m, seat, raw) } } };
     }
     const status = v.reason === "malformed" ? 400 : 422;
-    return { status, body: { error: v.reason, message: v.detail }, deny: { reason: v.reason, extra: { match: m.id, type } } };
+    // Log fields come from the parsed command: kinds only if they are known
+    // enum strings, detail is the server's own text.
+    const unit = typeof raw.unit === "string" && Object.hasOwn(UNITS, raw.unit) ? raw.unit : undefined;
+    const building = raw.building === "barracks" ? raw.building : undefined;
+    const detail = v.detail.slice(0, 120);
+    return { status, body: { error: v.reason, message: v.detail }, deny: { reason: v.reason, extra: { match: m.id, type, seat, unit, building, detail } } };
   }
   m.queue.push({ seat, command: v.command });
   m.lastCmd[seat] = now;
@@ -396,10 +401,11 @@ function flushRateLogs(): void {
 }
 
 // One `command` line per seat per type per two seconds.
-const commandLog = new Map<string, { who: string; match: number; tick: number; seat: Seat; type: string; n: number; units: number; timer: NodeJS.Timeout }>();
+const commandLog = new Map<string, { who: string; match: number; tick: number; seat: Seat; type: string; unit?: string; n: number; units: number; timer: NodeJS.Timeout }>();
 
 function noteCommand(m: Live, seat: Seat, c: Command, tick: number): void {
-  const key = `${m.id}:${seat}:${c.type}`;
+  const unit = c.type === "train" ? c.unit : undefined;
+  const key = `${m.id}:${seat}:${c.type}${unit ? `:${unit}` : ""}`;
   const units = "units" in c ? c.units.length : 0;
   const open = commandLog.get(key);
   if (open) {
@@ -409,7 +415,7 @@ function noteCommand(m: Live, seat: Seat, c: Command, tick: number): void {
   }
   const timer = setTimeout(() => flushCommand(key), COMMAND_LOG_MS);
   timer.unref();
-  commandLog.set(key, { who: seatMark(m, seat), match: m.id, tick, seat, type: c.type, n: 1, units, timer });
+  commandLog.set(key, { who: seatMark(m, seat), match: m.id, tick, seat, type: c.type, ...(unit ? { unit } : {}), n: 1, units, timer });
 }
 
 function flushCommand(key: string): void {
@@ -565,7 +571,7 @@ function logEvents(m: Live, events: SimEvent[]): void {
         log("unit.trained", { who: seatMark(m, e.seat), match: m.id, tick: e.tick, seat: e.seat, kind: e.kind, unit: e.unit });
         break;
       case "creature.aggro":
-        log("creature.aggro", { who: "-", match: m.id, tick: e.tick, creature: e.kind, target: e.target, targetSeat: e.targetSeat, owner: seatMark(m, e.targetSeat) });
+        log("creature.aggro", { who: "-", match: m.id, tick: e.tick, creature: e.kind, target: e.target, targetKind: m.state?.entities.find((x) => x.id === e.target)?.kind, targetSeat: e.targetSeat, owner: seatMark(m, e.targetSeat) });
         break;
       case "unit.died": {
         const key = `${e.side}:${e.kind}:${e.cause}:${e.byKind}:${e.bySide}`;

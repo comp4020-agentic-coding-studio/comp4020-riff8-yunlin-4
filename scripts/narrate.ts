@@ -7,6 +7,10 @@
 // `HH:MM:SS <sentence>`. The time is the time part of the line's `ts`, in UTC.
 // Lines that are not JSON objects pass through unchanged. Never throws.
 //
+// Lines with a `tick` get the game time as `[m:ss]` (tick / 4 seconds) after
+// the wall-clock time; the two differ when the server steps faster than real
+// time. Match-scoped lines without a tick carry no bracket.
+//
 // People are named by mark (`who`), "the bot", or "someone new". Seats 0/1 are
 // east/west; a match.start line teaches the narrator who sits where, per match.
 //
@@ -18,6 +22,7 @@ import { fileURLToPath } from "node:url";
 
 export interface NarrateMemory {
   matches: Map<string, { east?: string; west?: string }>;
+  legend?: boolean;
 }
 export interface NarrateOptions {
   quiet?: boolean;
@@ -75,6 +80,12 @@ function tidy(v: unknown): string {
 function num(v: unknown): number | undefined {
   return typeof v === "number" && Number.isFinite(v) ? v : undefined;
 }
+function article(w: string): string {
+  return `${/^[aeiou]/.test(w) ? "an" : "a"} ${w}`;
+}
+function pl(w: string): string {
+  return w === "spearman" ? "spearmen" : `${w}s`;
+}
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
@@ -103,7 +114,9 @@ function narrate(line: string, memory: NarrateMemory, opts: NarrateOptions): str
   if (opts.quiet && QUIET.has(event)) return null;
 
   const time = typeof e.ts === "string" ? (/T(\d\d:\d\d:\d\d)/.exec(e.ts)?.[1] ?? "--:--:--") : "--:--:--";
-  return `${time} ${sentence(event, e, memory)}`;
+  const t = num(e.tick) ?? (event === "match.end" ? num(e.ticks) : undefined);
+  const game = t === undefined || t < 0 ? "" : ` [${Math.floor(t / 4 / 60)}:${String(Math.floor(t / 4) % 60).padStart(2, "0")}]`;
+  return `${time}${game} ${sentence(event, e, memory)}`;
 }
 
 function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemory): string {
@@ -118,6 +131,17 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
     const n = num(s);
     return n === 0 || n === 1 ? SEATS[n] : undefined;
   };
+  const seatOfMark = (m: unknown): string | undefined => {
+    const v = str(m);
+    if (v === undefined || v === "" || v === "-" || !seats) return undefined;
+    return seats.east === v ? "east" : seats.west === v ? "west" : undefined;
+  };
+  // A mark with its side appended, from an explicit seat or the match's seating.
+  const tagged = (m: unknown, seat?: unknown): string => {
+    const base = markOf(m);
+    const n = seatName(seat) ?? seatOfMark(m);
+    return n !== undefined && base !== "someone new" ? `${base} (${n})` : base;
+  };
   // Person at a seat: "mark (east)" when known, else "the east player".
   const atSeat = (s: unknown): string => {
     const name = seatName(s);
@@ -127,11 +151,10 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
   };
   // The actor: `who` plus a seat annotation when we know it.
   const actor = (): string => {
-    const who = markOf(e.who);
     const name = seatName(e.seat);
-    return name !== undefined && who !== "someone new" ? `${who} (${name})` : name !== undefined ? atSeat(e.seat) : who;
+    return name !== undefined && markOf(e.who) === "someone new" ? atSeat(e.seat) : tagged(e.who, e.seat);
   };
-  const who = markOf(e.who);
+  const who = e.match === undefined ? markOf(e.who) : tagged(e.who);
   const kind = (k: unknown): string => (str(k) === undefined ? "piece" : tidy(k));
   const creature = (k: unknown): string => CREATURES[str(k) ?? ""] ?? (str(k) === undefined ? "creature" : tidy(k));
 
@@ -172,18 +195,31 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
     case "denied": {
       const reason = str(e.reason) ?? "unknown";
       const owner = e.owner === undefined ? undefined : markOf(e.owner);
+      const unitKind = str(e.unit);
+      const detail = str(e.detail) === undefined ? "" : ` (${tidy(e.detail)})`;
+      const who2 = e.seat === undefined ? who : actor();
+      const type = str(e.type);
+      const attempt =
+        type === "train" ? `train ${article(unitKind ?? "unit")}` : type === "build" ? `build ${article(str(e.building) ?? "building")}` : undefined;
       if (reason === "not-yours") {
         const route = str(e.route) ?? "";
         const what = route.includes("command") ? "a unit" : route.includes("chronicle") ? "a chronicle" : "something";
-        return `${who} tried to ${route.includes("command") ? "command" : "touch"} ${what} that is not theirs${owner ? ` (it is ${owner}'s)` : ""}: refused`;
+        return `${who2} tried to ${route.includes("command") ? "command" : "touch"} ${what} that is not theirs${owner ? ` (it is ${owner}'s)` : ""}: refused`;
       }
+      if (attempt !== undefined && reason === "grain") return `${who2} tried to ${attempt} but couldn't afford it: refused`;
+      if (attempt !== undefined && reason === "pop-cap") return `${who2} tried to ${attempt} but was at the population cap: refused`;
+      if (attempt !== undefined && reason === "invalid") {
+        const place = type === "build" && /ground|off the map|needs/.test(str(e.detail) ?? "");
+        return place ? `${who2} tried to ${attempt} where it can't stand${detail}: refused` : `${who2} tried to ${attempt} but was refused${detail}: refused`.replace(": refused: refused", ": refused");
+      }
+      if (reason === "invalid" && type !== undefined && type !== "-") return `${who2} sent an invalid ${tidy(type)} command${detail}: refused`;
       const text = DENIED[reason];
-      const base = text ? `${who} ${text}` : `${who} was refused (${tidy(reason)})`;
+      const base = text ? `${who2} ${text}` : `${who2} was refused (${tidy(reason)})`;
       return owner ? `${base} [${owner}'s]` : base;
     }
 
     case "match.create":
-      return `${who} created a match and took the east seat`;
+      return `${markOf(e.who)} created a match and took the east seat`;
     case "match.join":
       return `${who} joined the match and took the west seat`;
     case "match.bot":
@@ -192,29 +228,29 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
       const east = e.east === undefined ? undefined : tidy(e.east);
       const west = e.west === undefined ? undefined : tidy(e.west);
       if (matchKey !== undefined) memory.matches.set(matchKey, { east, west });
-      return `match ${matchKey ?? "?"} began: ${markOf(east)} in the east against ${markOf(west)} in the west`;
+      const onMap = e.map === undefined ? "" : ` on ${tidy(e.map)}`;
+      if (!memory.legend) {
+        memory.legend = true;
+        return `match ${matchKey ?? "?"} began${onMap}: ${markOf(east)} holds the east seat, ${markOf(west)} the west; creatures (年 蛟龍 麒麟 貔貅) belong to neither`;
+      }
+      return `match ${matchKey ?? "?"} began${onMap}: ${markOf(east)} in the east against ${markOf(west)} in the west`;
     }
     case "command": {
       const n = num(e.n) ?? 1;
       const units = num(e.units);
       const type = str(e.type) ?? "";
-      const verb: Record<string, string> = {
-        move: "move",
-        attack: "attack",
-        gather: "gather",
-        stop: "stop",
-        build: "build a barracks",
-        train: "train a labourer",
-      };
-      const noun: Record<string, string> = { move: "move orders", attack: "attack orders", gather: "gather orders", stop: "stop orders" };
+      if (type === "train") {
+        const k = str(e.unit);
+        const at = k === "spearman" ? " at the barracks" : k === "labourer" ? " at the hall" : "";
+        return `${actor()} queued ${k === undefined ? (n > 1 ? `${n} units` : "a unit") : n > 1 ? `${n} ${pl(k)}` : article(k)}${at}`;
+      }
+      const verb: Record<string, string> = { move: "move", attack: "attack", gather: "gather", stop: "stop" };
+      if (type === "build") return `${actor()} ordered ${n > 1 ? `${n} barracks` : "a barracks"} built`;
       if (n > 1) {
-        const label = noun[type] ?? `${type === "build" ? "build" : type === "train" ? "train" : tidy(type)} orders`;
-        return `${actor()} gave ${n} ${label}${units === undefined ? "" : ` to ${units} units`}`;
+        return `${actor()} sent ${verb[type] ?? tidy(type)} orders ${n} times${units === undefined ? "" : ` (${units} units named in all)`}`;
       }
       const what = verb[type] ?? (type === "" ? "do something" : tidy(type));
-      const target = units === undefined || units === 0 ? "" : `${units} ${units === 1 ? "unit" : "units"} `;
-      if (type === "build" || type === "train") return `${actor()} ordered ${type === "build" ? "a barracks built" : "a labourer trained"}${units ? ` (${units} units)` : ""}`;
-      return `${actor()} ordered ${target}${target ? "to " : "to "}${what}`.replace("ordered to", "ordered");
+      return `${actor()} ordered ${units === undefined || units === 0 ? "" : `${units} ${units === 1 ? "unit" : "units"} `}to ${what}`.replace("ordered to", "ordered");
     }
     case "build.start":
       return `${actor()} began building a ${kind(e.kind)}`;
@@ -223,17 +259,21 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
     case "unit.trained":
       return `${actor()} trained a ${kind(e.kind)}`;
     case "creature.aggro":
-      return `the ${creature(e.creature)} turned on ${markOf(e.owner)}'s unit ${tidy(e.target)}`.replace("'s unit", `'s ${e.kind ? kind(e.kind) : "unit"}`);
+      return `the ${creature(e.creature)} (a creature, no one's side) attacked ${tagged(e.owner, e.targetSeat)}'s ${e.targetKind === undefined ? "unit" : kind(e.targetKind)} ${tidy(e.target)}`;
     case "unit.died": {
       const count = num(e.count) ?? 1;
-      const owner = e.owner === undefined ? atSeat(e.seat) : markOf(e.owner);
-      const what = count > 1 ? `${count} of ${owner}'s ${kind(e.kind)}s` : `${owner}'s ${kind(e.kind)}`;
-      if (e.cause === "creature") {
-        return count > 1
-          ? `a ${creature(e.by)} took ${count} of ${owner}'s ${kind(e.kind)}s`
-          : `a ${creature(e.by)} took ${owner}'s ${kind(e.kind)}`;
-      }
-      return `${what} fell to ${atSeat(e.bySeat)}'s ${kind(e.by)}`;
+      const owner = e.owner === "wild" || e.seat === "wild" ? undefined : tagged(e.owner, e.seat);
+      const k = kind(e.kind);
+      const victim =
+        owner === undefined
+          ? count > 1 ? `${count} ${creature(e.kind)}s` : `a ${creature(e.kind)}`
+          : count > 1 ? `${count} of ${owner}'s ${pl(k)}` : `${owner}'s ${k}${e.unit === undefined ? "" : ` ${tidy(e.unit)}`}`;
+      const bySide = seatName(e.bySeat);
+      const killer =
+        e.cause === "creature" || bySide === undefined
+          ? `the ${creature(e.by)}`
+          : `${atSeat(e.bySeat)}'s ${count > 1 ? pl(kind(e.by)) : kind(e.by)}`;
+      return count > 1 || e.cause === "creature" ? `${victim} ${count > 1 ? "were" : "was"} killed by ${killer}` : `${victim} fell to ${killer}`;
     }
     case "relic.claimed":
       return `${actor()} claimed a relic${num(e.grain) === undefined ? "" : ` worth ${num(e.grain)} grain`}`;
@@ -244,10 +284,9 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
       let dur = "";
       if (ticks !== undefined) {
         const secs = Math.floor(ticks / 4);
-        dur = ` after ${Math.floor(secs / 60)}m ${secs % 60}s (${ticks} ticks at 4 a second)`;
+        dur = ` after ${Math.floor(secs / 60)}m ${secs % 60}s of game time (${ticks} ticks at 4 a second)`;
       }
       const reason = str(e.reason) ?? "";
-      const wseat = seatName(e.winnerSeat);
       let result: string;
       if (e.winner === null || e.winner === undefined) result = "no winner";
       else {
@@ -258,7 +297,7 @@ function sentence(event: string, e: Record<string, unknown>, memory: NarrateMemo
           restart: "when the server restarted",
           time: "on time",
         };
-        result = `${markOf(e.winner)}${wseat ? ` (${wseat})` : ""} won ${by[reason] ?? `(${tidy(reason)})`}`;
+        result = `${tagged(e.winner, e.winnerSeat)} won ${by[reason] ?? `(${tidy(reason)})`}`;
       }
       if (e.winner === null || e.winner === undefined) result += reason ? ` (${tidy(reason)})` : "";
       return `match ${matchKey ?? "?"} ended${dur}: ${result}`;
