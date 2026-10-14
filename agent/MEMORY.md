@@ -2677,3 +2677,71 @@ verifying and shipping, not manufacturing one more find.
   check whether the same channel can be verified with a non-persistent event
   (here, presence travels the same SSE stream as colophons through Fly's
   proxy), and verify the persistent path against the identical Docker image.
+- **A real-time feature that only changes the DOM isn't real-time for a
+  screen-reader user.** Ask what they hear for each live event type, and
+  write the answer down as a decision, since announcing is a choice with a
+  cost (it interrupts). Colophon announces new content through a hidden
+  `role="status"` line, batching a burst (a reconnect replay) into a count,
+  and never announces presence.
+- To watch a CI redeploy's effect on an open live page, open it in
+  `agent-browser` *before* pushing and attach a `MutationObserver` that logs
+  timestamped changes to `window`. The log survives the deploy, so it shows
+  when the stream reconnected without a reload.
+- **CDP `Network.emulateNetworkConditions` latency delays a stream's response
+  start, not later chunks**: an SSE stream opened under 150kbps/600ms took ~4s
+  to load the page but delivered each later event within ~10ms. A "real-time
+  under a slow connection" check this way tests connect/reconnect cost, not
+  per-event lag.
+- `pkill -f <pattern>` inside a Bash tool call matches the tool's own shell
+  (its command line contains the pattern) and kills it (exit 144). Kill by PID
+  from `pgrep` in a separate call instead.
+- Many-readers presence load test: open N `curl -sN` SSE streams with distinct
+  identity cookies, then view in one real browser. Before blaming a hash for a
+  run of repeats from a small pool, measure its distribution (here uniform:
+  the repeats were the birthday problem).
+- **Load-test a live layer's fan-out, not just its correctness.** Presence
+  sent to every reader on every join is O(N²) per arrival: 800 raw non-reading
+  sockets took Colophon to 3.7 GB, and Fly sets no default `hard_limit` in
+  front of a 256 MB machine. Coalesce broadcasts per burst and cap each
+  stream's user-space backlog. Measurement gotchas: localhost TCP send buffers
+  autotune to MBs (so `res.writableLength` stays small), Node's
+  `socket.pause()` doesn't stall the kernel receiver, and a stalled client
+  needs Python `SO_RCVBUF` 4096. Never `pgrep -f`/`kill $(pgrep ...)` in the
+  same Bash call that started the server: the shell's own command line matches
+  the pattern.
+- **A server-side length cap paired with a textarea `maxlength` disagrees
+  on line breaks**: `maxlength` counts a newline as one character, the form
+  submits it as CRLF. A multi-line entry at the limit gets rejected, and on a
+  redirect-on-error form the visitor's text is lost. Normalise `\r\n?` to `\n`
+  before checking. Only typing a multi-line entry to the limit in a real
+  browser found it; every spec length test had used single-line strings.
+- Pass `--args "--no-sandbox"` on *every* `agent-browser` call, not just the
+  first: if the first launch fails, later bare calls auto-launch a fresh Chrome
+  without the flag and all die with "No usable sandbox". A shell function
+  `B(){ agent-browser --args "--no-sandbox" "$@"; }` run from the repo cwd
+  avoids both this and the mise-shim cwd footgun.
+- Crit 9 finished at 28h out after a run of verify-and-stop ticks; on a CI-
+  deployed repo, compare `flyctl image show`'s `GH_SHA` label against HEAD
+  before and after the final push.
+- **A textarea `maxlength` silently truncates a paste**: the browser keeps the
+  first N characters, mid-word, with no message. That's client-side the very
+  "never auto-truncate" rule an app may state for its server. Check with
+  `agent-browser clipboard write`/`clipboard paste` (typing can't exceed the
+  limit, so it never shows). Fix: enforce the limit only on the server, and
+  answer a rejection with the page itself (not a redirect), the text escaped
+  back into the box; add a GET redirect for the POST address it leaves in the
+  URL bar.
+
+## Crit 10 additions (Fly by instruments — who did what)
+
+- **An `async` `node:http` request handler with no try/catch turns any
+  rejection into an unhandled rejection, and Node 24 exits the process on
+  one.** A client that sends half a declared `Content-Length` and hangs up
+  makes `for await (const chunk of req)` throw `Error: aborted`; in Colophon
+  that took the whole server down for every reader. Wrap the handler in one
+  error boundary from the first draft of any plain-`node:http` app; a raw
+  socket (`node:net`) is the way to test it.
+- For a "logs must say who did what" brief on an anonymous-identity app, log a
+  one-way pseudonym (display glyph + a few hex of the token's hash), never the
+  token, and only actions, never views --- otherwise the log becomes the
+  permanent who-was-here record the app's own design rejected.
