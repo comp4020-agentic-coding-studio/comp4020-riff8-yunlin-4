@@ -222,7 +222,7 @@ Same finding as F-15, found independently from outside; fixed by per-side id
 sequences before this report arrived. Raises F-15's weight; verified by
 `spec/sim-fog` (seat 1's production never shifts seat 0's ids).
 
-### F-32 [open] major · round 2 · adversary · slot
+### F-32 [fixed] major · round 2 · adversary · slot
 What: create a match and walk away: everyone else gets 409 for ten real
 minutes, and the same person can create again at once.
 Triage: accepted → T-20. An unjoined match waits three minutes, not ten

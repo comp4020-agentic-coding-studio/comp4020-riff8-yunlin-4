@@ -34,7 +34,7 @@ alone; this file does its job.
 - [x] Triage round 1, fix blockers/majors (21:10)
 - [x] Link the game from the scroll page (21:11)
 - [x] Round 2: all six personas plus a log-only reader and a blind code audit; 4 blockers, 13 majors (21:48)
-- [ ] T-20 (F-32, major) an unjoined match lapses after three minutes — done when: spec with short env
+- [x] T-20 (F-32, major) an unjoined match lapses after three minutes — done when: spec with short env
 
 ### M3 — hold up (2:30–3:30)
 - [x] Access audit subagent; fixes with specs (crash, ids, slot, streams) (21:48)
